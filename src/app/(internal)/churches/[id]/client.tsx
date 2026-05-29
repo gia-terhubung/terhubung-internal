@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AssignChurchAdminModal } from '@/components/organisms/AssignChurchAdminModal.organism';
 import { EditChurchContactModal } from '@/components/organisms/EditChurchContactModal.organism';
 import { EditChurchLocationModal } from '@/components/organisms/EditChurchLocationModal.organism';
+import { ChangeSubscriptionModal } from '@/components/organisms/ChangeSubscriptionModal.organism';
 import { Avatar } from '@/components/atoms/Avatar.atom';
 import { Badge } from '@/components/atoms/Badge.atom';
 import type { ChurchAdminRow, ChurchContact, ChurchDetail } from '@/services/church.service';
@@ -12,6 +13,7 @@ import type {
   BillingStatus,
   ChurchBillingHistory,
   ChurchSubscriptionInfo,
+  ChurchPlanOption,
 } from '@/types/internal.types';
 
 const idr = (n: number | null) =>
@@ -47,16 +49,19 @@ export function ChurchDetailClient({
   subscription,
   billing,
   contact,
+  plans,
 }: {
   church: ChurchDetail;
   admins: ChurchAdminRow[];
   subscription: ChurchSubscriptionInfo | null;
   billing: ChurchBillingHistory;
   contact: ChurchContact | null;
+  plans: ChurchPlanOption[];
 }) {
   const [showAssign, setShowAssign] = useState(false);
   const [showEditContact, setShowEditContact] = useState(false);
   const [showEditLocation, setShowEditLocation] = useState(false);
+  const [showChangeSub, setShowChangeSub] = useState(false);
 
   const features = subscription
     ? Object.entries(subscription.features)
@@ -149,9 +154,19 @@ export function ChurchDetailClient({
       <div className="rounded-xl border border-border-color bg-bg-secondary p-5">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-semibold text-text-primary">Langganan Saat Ini</h2>
-          <Badge variant={STATUS[subscription?.status ?? 'none'].variant}>
-            {STATUS[subscription?.status ?? 'none'].label}
-          </Badge>
+          <div className="flex items-center gap-3">
+            <Badge variant={STATUS[subscription?.status ?? 'none'].variant}>
+              {STATUS[subscription?.status ?? 'none'].label}
+            </Badge>
+            {subscription && plans.length > 0 && (
+              <button
+                onClick={() => setShowChangeSub(true)}
+                className="rounded-lg bg-bg-hover px-3 py-1.5 text-sm text-text-primary hover:bg-bg-tertiary"
+              >
+                Ubah Paket
+              </button>
+            )}
+          </div>
         </div>
         {subscription ? (
           <>
@@ -281,6 +296,15 @@ export function ChurchDetailClient({
       </div>
 
       {showAssign && <AssignChurchAdminModal churchId={church.id} onClose={() => setShowAssign(false)} />}
+      {showChangeSub && subscription && (
+        <ChangeSubscriptionModal
+          churchId={church.id}
+          currentTier={subscription.tier}
+          currentInterval={subscription.interval}
+          plans={plans}
+          onClose={() => setShowChangeSub(false)}
+        />
+      )}
       {showEditContact && (
         <EditChurchContactModal churchId={church.id} contact={contact} onClose={() => setShowEditContact(false)} />
       )}

@@ -98,6 +98,21 @@ export interface ChurchSubscriptionInfo {
   admin_limit: number | null;
 }
 
+// Selectable church plan (manual promote/demote picker).
+export interface ChurchPlanOption {
+  id: string;
+  tier: string;
+  interval: 'month' | 'year';
+  price_idr: number | null;
+}
+
+// Manual subscription change payload (internal staff promote/demote).
+export interface ApplySubscriptionChangeInput {
+  churchId: string;
+  planId: string;
+  amountIdr?: number | null; // optional manually-collected payment
+}
+
 // Church creation history (global).
 export interface ChurchCreationRow {
   id: string;

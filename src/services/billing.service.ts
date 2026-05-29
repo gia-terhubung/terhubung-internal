@@ -8,6 +8,7 @@ import type {
   BillingEventRow,
   PaymentRow,
   ChurchSubscriptionInfo,
+  ChurchPlanOption,
 } from '@/types/internal.types';
 
 const DAY_MS = 86_400_000;
@@ -145,4 +146,21 @@ export async function getChurchSubscription(churchId: string): Promise<ChurchSub
     member_limit,
     admin_limit,
   };
+}
+
+/** Active church plans, cheapest first — for the manual promote/demote picker. */
+export async function listChurchPlans(): Promise<ChurchPlanOption[]> {
+  await requireInternalAdmin();
+  const admin = createAdminClient();
+
+  const { data, error } = await admin
+    .schema('billing')
+    .from('subscription_plans')
+    .select('id, tier, interval, price_idr')
+    .eq('scope', 'church')
+    .is('effective_until', null)
+    .order('price_idr', { ascending: true, nullsFirst: true });
+  if (error) throw new Error(error.message);
+
+  return (data as ChurchPlanOption[]) ?? [];
 }
