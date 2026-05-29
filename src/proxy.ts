@@ -41,7 +41,7 @@ export async function proxy(request: NextRequest) {
     const last = request.cookies.get('internal_last_active')?.value;
     const now = Date.now();
     if (last && now - Number(last) > IDLE_MS) {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: 'local' });
       const url = request.nextUrl.clone();
       url.pathname = '/login';
       url.search = 'error=timeout';

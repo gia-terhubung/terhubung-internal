@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server';
 // otherwise bounces any logged-in user away from /login back to /dashboard.
 export async function GET(request: Request) {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({ scope: 'local' });
 
   const { origin, searchParams } = new URL(request.url);
   const reason = searchParams.get('reason') ?? 'not_allowed';
