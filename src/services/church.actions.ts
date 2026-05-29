@@ -118,6 +118,20 @@ export async function assignChurchAdminAction(input: {
     return { ok: false, error: error.message };
   }
 
+  // The candidate may have an open membership request for this church from the
+  // mobile app. Now that they're an admin, close it so it doesn't linger in the
+  // church's pending-requests inbox. Best-effort: assignment already succeeded.
+  const { error: reqError } = await admin
+    .from('membership_requests')
+    .update({ status: 'approved', reviewed_at: new Date().toISOString() })
+    .eq('user_id', input.userId)
+    .eq('church_id', input.churchId)
+    .eq('status', 'pending');
+
+  if (reqError) {
+    console.warn('Failed to resolve pending membership request on admin assign:', reqError.message);
+  }
+
   await seedContactFromAdmin(admin, input.churchId, input.userId);
 
   revalidatePath(`/churches/${input.churchId}`);
