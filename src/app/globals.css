@@ -1,26 +1,83 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* LIGHT MODE VARIABLES */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f9fafb;
+  --bg-tertiary: #f3f4f6;
+  --bg-hover: #e5e7eb;
+
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+
+  --border-color: #e5e7eb;
+  --border-strong: #d1d5db;
+
+  --brand-color: #43c6b6;
+  --brand-hover: #2e9488;
+  --brand-content: #121215;
+
+  --danger: #ff5a5f;
+  --danger-hover: #ff7a7e;
+
+  --warning: #eab308;
 }
 
+/* DARK MODE VARIABLES */
+.dark {
+  --bg-primary: #121215;
+  --bg-secondary: #1c1c20;
+  --bg-tertiary: #222226;
+  --bg-hover: #2a2a2e;
+
+  --text-primary: #f2f2f4;
+  --text-secondary: #a1a1a6;
+
+  --border-color: #2e2e32;
+  --border-strong: #3a3a3e;
+
+  --brand-color: #43c6b6;
+  --brand-hover: #2e9488;
+  --brand-content: #121215;
+
+  --danger: #ff5a5f;
+  --danger-hover: #ff7a7e;
+
+  --warning: #eab308;
+}
+
+/* Expose to Tailwind v4 via @theme inline */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-secondary: var(--bg-secondary);
+  --color-bg-tertiary: var(--bg-tertiary);
+  --color-bg-hover: var(--bg-hover);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+
+  --color-border-color: var(--border-color);
+  --color-border-strong: var(--border-strong);
+
+  --color-brand: var(--brand-color);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-content: var(--brand-content);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-warning: var(--warning);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+body main {
+  transition: margin-left 0.3s ease-in-out;
+}
+
+body.sidebar-collapsed main {
+  margin-left: 5rem !important;
 }
