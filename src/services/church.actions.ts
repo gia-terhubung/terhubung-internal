@@ -99,14 +99,22 @@ export async function assignChurchAdminAction(input: {
   userId: string;
   churchId: string;
 }): Promise<ActionResult> {
-  await requireInternalAdmin();
+  const { user } = await requireInternalAdmin();
   if (!input.userId || !input.churchId) return { ok: false, error: 'Data tidak lengkap.' };
 
   const admin = createAdminClient();
+  // Grant member alongside church_admin (member first). An elevated role is meant
+  // to sit on top of a member row — RLS encodes this, and a DB trigger enforces
+  // it for all paths; we set it explicitly here so the intent is visible and
+  // survives even if the trigger is ever disabled. Without member, demoting the
+  // admin later would orphan the user from the church.
   const { error } = await admin
     .from('user_roles')
     .upsert(
-      { user_id: input.userId, church_id: input.churchId, role: 'church_admin' },
+      [
+        { user_id: input.userId, church_id: input.churchId, role: 'member' },
+        { user_id: input.userId, church_id: input.churchId, role: 'church_admin' },
+      ],
       { onConflict: 'user_id, church_id, role' }
     );
 
@@ -119,17 +127,40 @@ export async function assignChurchAdminAction(input: {
   }
 
   // The candidate may have an open membership request for this church from the
-  // mobile app. Now that they're an admin, close it so it doesn't linger in the
-  // church's pending-requests inbox. Best-effort: assignment already succeeded.
-  const { error: reqError } = await admin
+  // mobile app. Approve a `member` request through the RPC so the user gets the
+  // standard "membership approved" notification (the member role it inserts is a
+  // no-op given the upsert above). A `sympathizers` request is just closed — that
+  // role is mutually exclusive with the member they now hold as admin, so we must
+  // not grant it. Best-effort throughout: the assignment already succeeded.
+  const { data: pendingRequests, error: reqError } = await admin
     .from('membership_requests')
-    .update({ status: 'approved', reviewed_at: new Date().toISOString() })
+    .select('id, requested_role')
     .eq('user_id', input.userId)
     .eq('church_id', input.churchId)
     .eq('status', 'pending');
 
   if (reqError) {
-    console.warn('Failed to resolve pending membership request on admin assign:', reqError.message);
+    console.warn('Failed to load pending membership request on admin assign:', reqError.message);
+  }
+
+  for (const req of pendingRequests ?? []) {
+    if (req.requested_role === 'sympathizers') {
+      const { error: closeError } = await admin
+        .from('membership_requests')
+        .update({ status: 'approved', reviewed_by: user.id, reviewed_at: new Date().toISOString() })
+        .eq('id', req.id);
+      if (closeError) {
+        console.warn('Failed to close sympathizers request on admin assign:', closeError.message);
+      }
+    } else {
+      const { error: approveError } = await admin.rpc('approve_membership_request', {
+        request_id: req.id,
+        reviewed_by_id: user.id,
+      });
+      if (approveError) {
+        console.warn('Failed to approve membership request on admin assign:', approveError.message);
+      }
+    }
   }
 
   await seedContactFromAdmin(admin, input.churchId, input.userId);
