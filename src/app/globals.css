@@ -67,6 +67,9 @@
   --color-danger: var(--danger);
   --color-danger-hover: var(--danger-hover);
   --color-warning: var(--warning);
+
+  --font-sans: var(--font-figtree);
+  --font-display: var(--font-bricolage);
 }
 
 body {

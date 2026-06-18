@@ -66,16 +66,15 @@ function LoginForm() {
   const inputCls =
     'mt-1 w-full rounded-lg border border-border-color bg-bg-primary px-3 py-2 text-text-primary outline-none focus:border-brand';
   const btnCls =
-    'w-full rounded-lg bg-brand px-4 py-2 font-semibold text-brand-content transition-colors hover:bg-brand-hover disabled:opacity-60';
+    'w-full rounded-lg bg-brand px-4 py-2 font-semibold text-brand-content transition-colors hover:bg-brand-hover disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg-tertiary';
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-border-strong bg-bg-tertiary p-8 shadow-xl">
+    <div className="w-full max-w-md rounded-2xl border border-border-color bg-bg-tertiary p-8 shadow-sm">
       <div className="mb-6 flex flex-col items-center text-center">
         <div className="relative mb-4 h-16 w-16 overflow-hidden rounded-xl">
           <Image src="/images/icon.png" alt="Terhubung" fill className="object-cover" sizes="64px" />
         </div>
-        <h1 className="text-2xl font-bold text-text-primary">Masuk ke Terhubung Internal</h1>
-        <p className="mt-1 text-sm text-text-secondary">Khusus staf internal Terhubung.</p>
+        <h1 className="font-display text-2xl font-bold tracking-tight text-text-primary">Masuk ke Terhubung Internal</h1>
       </div>
 
       {urlNotice && (
@@ -139,10 +138,34 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg-primary px-4">
-      <Suspense fallback={null}>
-        <LoginForm />
-      </Suspense>
+    <div className="flex min-h-screen bg-bg-primary text-text-primary">
+
+      {/* LEFT — brand panel (lg+ only, wordmark-only) */}
+      <aside className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative overflow-hidden bg-[linear-gradient(150deg,#43c6b6_0%,#2e9488_100%)] text-white">
+        {/* faint static dot-grid echoing brand texture */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-[0.12] bg-[radial-gradient(circle,#ffffff_1.5px,transparent_1.5px)] bg-[length:22px_22px]"
+        />
+
+        <div className="relative h-10 w-10 overflow-hidden rounded-lg">
+          <Image src="/images/icon.png" alt="Terhubung" fill className="object-cover" sizes="40px" />
+        </div>
+
+        <div className="relative">
+          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">Internal</span>
+          <h2 className="font-display text-5xl xl:text-6xl font-bold tracking-tight">Terhubung</h2>
+        </div>
+
+        <span className="relative text-sm text-white/60">terhubung.app</span>
+      </aside>
+
+      {/* RIGHT — OTP card */}
+      <main className="flex flex-1 items-center justify-center p-8">
+        <Suspense fallback={null}>
+          <LoginForm />
+        </Suspense>
+      </main>
     </div>
   );
 }

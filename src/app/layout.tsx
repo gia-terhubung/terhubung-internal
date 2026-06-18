@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Bricolage_Grotesque, Figtree } from 'next/font/google';
 import './globals.css';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 
-const inter = Inter({ subsets: ['latin'] });
+const figtree = Figtree({ subsets: ['latin'], variable: '--font-figtree' });
+const bricolage = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-bricolage' });
 
 export const metadata: Metadata = {
   title: 'Terhubung Internal',
@@ -16,7 +17,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="id" suppressHydrationWarning>
-      <body className={`${inter.className} bg-white dark:bg-bg-primary transition-colors duration-300 relative`}>
+      <body className={`${figtree.variable} ${bricolage.variable} font-sans bg-white dark:bg-bg-primary transition-colors duration-300 relative`}>
         {/* Desktop-only: this dashboard is dense, steer mobile users away. */}
         <div className="fixed inset-0 z-9999 flex md:hidden flex-col items-center justify-center bg-bg-primary px-8 text-center">
           <h1 className="text-2xl font-bold text-text-primary mb-3">Gunakan Perangkat Desktop</h1>
