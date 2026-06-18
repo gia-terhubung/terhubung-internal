@@ -145,7 +145,7 @@ export default function LoginPage() {
         {/* faint static dot-grid echoing brand texture */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-[0.12] bg-[radial-gradient(circle,#ffffff_1.5px,transparent_1.5px)] bg-[length:22px_22px]"
+          className="pointer-events-none absolute inset-0 opacity-[0.12] bg-[radial-gradient(circle,#ffffff_1.5px,transparent_1.5px)] bg-size-[22px_22px]"
         />
 
         <div className="relative h-10 w-10 overflow-hidden rounded-lg">
