@@ -10,6 +10,12 @@ const bricolage = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-br
 export const metadata: Metadata = {
   title: 'Terhubung Internal',
   description: 'Internal CMS',
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: { index: false, follow: false },
+  },
 };
 
 export default function RootLayout({
