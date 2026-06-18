@@ -34,10 +34,10 @@ export async function proxy(request: NextRequest) {
   const isAuthRoute = request.nextUrl.pathname.startsWith('/login');
   const isApiRoute = request.nextUrl.pathname.startsWith('/api');
 
-  // App-scoped idle timeout (30 min). Lives only in the internal app's proxy +
+  // App-scoped idle timeout (8h). Lives only in the internal app's proxy +
   // its own cookie, so mobile/other apps on the shared project are unaffected.
   if (user && !isApiRoute) {
-    const IDLE_MS = 24 * 60 * 60 * 1000;
+    const IDLE_MS = 8 * 60 * 60 * 1000;
     const last = request.cookies.get('internal_last_active')?.value;
     const now = Date.now();
     if (last && now - Number(last) > IDLE_MS) {

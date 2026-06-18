@@ -63,11 +63,15 @@ export async function searchAppUsersAction(query: string): Promise<AppUserResult
   const q = query.trim();
   if (q.length < 2) return [];
 
+  // Escape LIKE metacharacters so a query of `%`/`_` matches those literals
+  // instead of acting as wildcards (\ is the default ILIKE escape char).
+  const pattern = q.replace(/[\\%_]/g, (c) => `\\${c}`);
+
   const admin = createAdminClient();
   const { data: profiles, error } = await admin
     .from('profiles')
     .select('id, full_name, avatar_url')
-    .ilike('full_name', `%${q}%`)
+    .ilike('full_name', `%${pattern}%`)
     .limit(10);
   if (error) throw new Error(error.message);
 
