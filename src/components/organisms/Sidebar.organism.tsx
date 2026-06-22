@@ -99,7 +99,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`fixed left-0 border-r border-border-color bg-bg-secondary flex flex-col h-[calc(100vh-4rem)] z-10 transition-all duration-300 ${widthClass}`}
+      className={`fixed left-3 top-[4.75rem] bottom-3 rounded-2xl border border-border-color bg-bg-secondary shadow-lg flex flex-col z-10 transition-all duration-300 ${widthClass}`}
     >
       <button
         onClick={toggleSidebar}

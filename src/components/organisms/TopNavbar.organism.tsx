@@ -16,7 +16,7 @@ export function TopNavbar({ email }: { email: string }) {
   };
 
   return (
-    <header className="h-16 border-b border-border-color bg-bg-primary flex items-center justify-between px-6 sticky top-0 z-50">
+    <header className="h-16 border-b border-border-color/70 bg-bg-primary/70 backdrop-blur-xl backdrop-saturate-150 flex items-center justify-between px-6 sticky top-0 z-50">
       <div className="flex items-center gap-2">
         <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded">
           <Image src="/images/icon.png" alt="Terhubung" fill className="object-cover" sizes="32px" />

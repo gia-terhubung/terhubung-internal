@@ -77,10 +77,13 @@ body {
   color: var(--text-primary);
 }
 
+/* Sidebar Layout Transitions — pill floats with a 0.75rem gap each side */
 body main {
+  margin-left: 17.5rem !important; /* 0.75 gap + 16rem pill (w-64) + 0.75 gap; supersedes inline ml-64 */
   transition: margin-left 0.3s ease-in-out;
 }
 
+/* Collapsed pill: w-20 = 5rem */
 body.sidebar-collapsed main {
-  margin-left: 5rem !important;
+  margin-left: 6.5rem !important; /* 0.75 + 5 + 0.75 */
 }
