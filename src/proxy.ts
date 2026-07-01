@@ -29,14 +29,17 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // getClaims verifies the JWT locally (no network round-trip) once asymmetric
+  // JWT signing keys are enabled, and still refreshes an expired access token
+  // via the refresh token.
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims ?? null;
 
   const isAuthRoute = request.nextUrl.pathname.startsWith('/login');
-  const isApiRoute = request.nextUrl.pathname.startsWith('/api');
 
   // App-scoped idle timeout (8h). Lives only in the internal app's proxy +
   // its own cookie, so mobile/other apps on the shared project are unaffected.
-  if (user && !isApiRoute) {
+  if (claims) {
     const IDLE_MS = 8 * 60 * 60 * 1000;
     const last = request.cookies.get('internal_last_active')?.value;
     const now = Date.now();
@@ -59,8 +62,8 @@ export async function proxy(request: NextRequest) {
     });
   }
 
-  // Not logged in → bounce to /login (except the login page and api routes).
-  if (!user && !isAuthRoute && !isApiRoute) {
+  // Not logged in → bounce to /login (except the login page).
+  if (!claims && !isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     const redirectResponse = NextResponse.redirect(url);
@@ -71,14 +74,14 @@ export async function proxy(request: NextRequest) {
   }
 
   // Logged in → keep them off the login page.
-  if (user && isAuthRoute) {
+  if (claims && isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
     return NextResponse.redirect(url);
   }
 
   // Logged in → root redirects to dashboard.
-  if (user && request.nextUrl.pathname === '/') {
+  if (claims && request.nextUrl.pathname === '/') {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
     return NextResponse.redirect(url);
@@ -89,6 +92,23 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    {
+      /*
+       * Match all request paths except for:
+       * - api (route handlers self-authenticate / use their own client)
+       * - _next/static (static files)
+       * - _next/image (image optimization files)
+       * - favicon.ico (favicon file)
+       * - images, svgs, etc.
+       */
+      source: '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+      /*
+       * Skip Link prefetch requests — the proxy re-runs on the real navigation.
+       */
+      missing: [
+        { type: 'header', key: 'next-router-prefetch' },
+        { type: 'header', key: 'purpose', value: 'prefetch' },
+      ],
+    },
   ],
 };

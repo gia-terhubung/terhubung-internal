@@ -5,4 +5,5 @@ export const cookieOptions = {
   // Secure keeps the session cookie off any non-HTTPS hop in production.
   sameSite: 'lax' as const,
   secure: process.env.NODE_ENV === 'production',
+  path: '/',
 };

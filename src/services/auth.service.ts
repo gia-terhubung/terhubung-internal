@@ -10,9 +10,13 @@ export const ALLOWED_DOMAIN = '@terhubung.app';
 /** Valid Supabase session, or redirect to /login. */
 export const requireSession = cache(async () => {
   const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) redirect('/login');
-  return { supabase, user };
+  // getClaims verifies the JWT locally (no network round-trip) once asymmetric
+  // JWT signing keys are enabled, and still refreshes an expired access token
+  // via the refresh token.
+  const { data, error } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+  if (error || !claims) redirect('/login');
+  return { supabase, user: { id: claims.sub, email: claims.email ?? '' } };
 });
 
 /**
