@@ -27,6 +27,12 @@ const ICON = {
   clock: (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
   ),
+  flag: (
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2z" />
+  ),
+  mobile: (
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+  ),
 };
 
 const MAIN: NavItem[] = [
@@ -35,10 +41,14 @@ const MAIN: NavItem[] = [
 const DATA: NavItem[] = [
   { href: '/churches', label: 'Gereja', icon: ICON.church, match: (p) => p.startsWith('/churches') },
   { href: '/billing', label: 'Billing', icon: ICON.billing, match: (p) => p.startsWith('/billing') },
+  { href: '/moderation', label: 'Moderasi', icon: ICON.flag, match: (p) => p.startsWith('/moderation') },
   { href: '/history', label: 'Riwayat Gereja', icon: ICON.clock, match: (p) => p.startsWith('/history') },
 ];
 const ACCESS: NavItem[] = [
   { href: '/admins', label: 'Admin Internal', icon: ICON.shield, match: (p) => p.startsWith('/admins') },
+];
+const CONFIG: NavItem[] = [
+  { href: '/app-config', label: 'Versi Aplikasi', icon: ICON.mobile, match: (p) => p.startsWith('/app-config') },
 ];
 
 export function Sidebar() {
@@ -121,6 +131,7 @@ export function Sidebar() {
         <div className="space-y-1">{MAIN.map(renderLink)}</div>
         {renderSection('Data', DATA)}
         {renderSection('Akses', ACCESS)}
+        {renderSection('Konfigurasi', CONFIG)}
       </nav>
     </aside>
   );

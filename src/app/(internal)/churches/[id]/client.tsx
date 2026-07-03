@@ -2,12 +2,20 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { AssignChurchAdminModal } from '@/components/organisms/AssignChurchAdminModal.organism';
 import { EditChurchContactModal } from '@/components/organisms/EditChurchContactModal.organism';
 import { EditChurchLocationModal } from '@/components/organisms/EditChurchLocationModal.organism';
 import { ChangeSubscriptionModal } from '@/components/organisms/ChangeSubscriptionModal.organism';
+import { RenewSubscriptionModal } from '@/components/organisms/RenewSubscriptionModal.organism';
+import { ConfirmDialog } from '@/components/molecules/ConfirmDialog.molecule';
 import { Avatar } from '@/components/atoms/Avatar.atom';
 import { Badge } from '@/components/atoms/Badge.atom';
+import {
+  setCancelAtPeriodEndAction,
+  scheduleDowngradeToFreeAction,
+  resetPendingChangeAction,
+} from '@/services/billing.actions';
 import type { ChurchAdminRow, ChurchContact, ChurchDetail } from '@/services/church.service';
 import type {
   BillingStatus,
@@ -58,10 +66,35 @@ export function ChurchDetailClient({
   contact: ChurchContact | null;
   plans: ChurchPlanOption[];
 }) {
+  const router = useRouter();
   const [showAssign, setShowAssign] = useState(false);
   const [showEditContact, setShowEditContact] = useState(false);
   const [showEditLocation, setShowEditLocation] = useState(false);
   const [showChangeSub, setShowChangeSub] = useState(false);
+  const [showRenew, setShowRenew] = useState(false);
+  const [subConfirm, setSubConfirm] = useState<'cancel-on' | 'cancel-off' | 'downgrade' | 'reset' | null>(null);
+  const [subError, setSubError] = useState<string | null>(null);
+
+  const isPaid =
+    subscription != null &&
+    subscription.tier !== 'free' &&
+    !subscription.current_period_end.startsWith('infinity');
+
+  async function runSubAction(kind: 'cancel-on' | 'cancel-off' | 'downgrade' | 'reset') {
+    setSubError(null);
+    const res =
+      kind === 'downgrade'
+        ? await scheduleDowngradeToFreeAction({ churchId: church.id })
+        : kind === 'reset'
+          ? await resetPendingChangeAction({ churchId: church.id })
+          : await setCancelAtPeriodEndAction({ churchId: church.id, cancel: kind === 'cancel-on' });
+    if (!res.ok) {
+      setSubError(res.error);
+      return;
+    }
+    setSubConfirm(null);
+    router.refresh();
+  }
 
   const features = subscription
     ? Object.entries(subscription.features)
@@ -158,6 +191,14 @@ export function ChurchDetailClient({
             <Badge variant={STATUS[subscription?.status ?? 'none'].variant}>
               {STATUS[subscription?.status ?? 'none'].label}
             </Badge>
+            {isPaid && subscription && (
+              <button
+                onClick={() => setShowRenew(true)}
+                className="rounded-lg bg-brand px-3 py-1.5 text-sm font-bold text-brand-content hover:bg-brand-hover"
+              >
+                Perpanjang
+              </button>
+            )}
             {subscription && plans.length > 0 && (
               <button
                 onClick={() => setShowChangeSub(true)}
@@ -168,6 +209,30 @@ export function ChurchDetailClient({
             )}
           </div>
         </div>
+        {subscription?.pending_plan_id && (
+          <div className="mb-4 rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
+            <div className="flex items-center justify-between gap-3">
+              <span>
+                Perubahan terjadwal: →{' '}
+                <span className="capitalize">{subscription.pending_tier ?? 'paket lain'}</span>
+                {subscription.pending_change_at &&
+                  ` pada ${new Date(subscription.pending_change_at).toLocaleDateString('id-ID')}`}
+              </span>
+              <button
+                onClick={() => setSubConfirm('reset')}
+                className="shrink-0 rounded-lg bg-bg-hover px-3 py-1 text-xs text-text-primary hover:bg-bg-tertiary"
+              >
+                Reset
+              </button>
+            </div>
+            {subscription.pending_apply_error && (
+              <p className="mt-1 text-xs text-danger">
+                Gagal diterapkan: {subscription.pending_apply_error}
+              </p>
+            )}
+          </div>
+        )}
+        {subError && <p className="mb-4 text-sm text-danger">{subError}</p>}
         {subscription ? (
           <>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -193,7 +258,21 @@ export function ChurchDetailClient({
               />
               <Field
                 label="Batal akhir periode"
-                value={subscription.cancel_at_period_end ? 'Ya' : 'Tidak'}
+                value={
+                  <span className="flex items-center gap-2">
+                    {subscription.cancel_at_period_end ? 'Ya' : 'Tidak'}
+                    {isPaid && (
+                      <button
+                        onClick={() =>
+                          setSubConfirm(subscription.cancel_at_period_end ? 'cancel-off' : 'cancel-on')
+                        }
+                        className="rounded-lg bg-bg-hover px-2 py-0.5 text-xs text-text-primary hover:bg-bg-tertiary"
+                      >
+                        {subscription.cancel_at_period_end ? 'Batalkan' : 'Aktifkan'}
+                      </button>
+                    )}
+                  </span>
+                }
               />
               <Field label="Limit anggota" value={subscription.member_limit ?? 'Tak terbatas'} />
             </div>
@@ -207,6 +286,16 @@ export function ChurchDetailClient({
                     </Badge>
                   ))}
                 </div>
+              </div>
+            )}
+            {isPaid && !subscription.pending_plan_id && (
+              <div className="mt-4 border-t border-border-color pt-3">
+                <button
+                  onClick={() => setSubConfirm('downgrade')}
+                  className="text-xs text-danger hover:underline"
+                >
+                  Turunkan ke Free di akhir periode
+                </button>
               </div>
             )}
           </>
@@ -296,6 +385,39 @@ export function ChurchDetailClient({
       </div>
 
       {showAssign && <AssignChurchAdminModal churchId={church.id} onClose={() => setShowAssign(false)} />}
+      {showRenew && subscription && (
+        <RenewSubscriptionModal
+          churchId={church.id}
+          subscription={subscription}
+          onClose={() => setShowRenew(false)}
+        />
+      )}
+      {subConfirm && (
+        <ConfirmDialog
+          title={
+            subConfirm === 'downgrade'
+              ? 'Turunkan ke Free'
+              : subConfirm === 'reset'
+                ? 'Reset Perubahan Terjadwal'
+                : 'Batal Akhir Periode'
+          }
+          message={
+            subConfirm === 'cancel-on' ? (
+              <>Tandai langganan {church.name} untuk dibatalkan di akhir periode? Fitur tetap aktif sampai periode berakhir.</>
+            ) : subConfirm === 'cancel-off' ? (
+              <>Hapus penanda batal akhir periode untuk {church.name}?</>
+            ) : subConfirm === 'downgrade' ? (
+              <>Jadwalkan penurunan {church.name} ke paket Free saat periode berakhir?</>
+            ) : (
+              <>Hapus perubahan terjadwal (dan error penerapannya) untuk {church.name}?</>
+            )
+          }
+          confirmLabel={subConfirm === 'reset' ? 'Reset' : 'Konfirmasi'}
+          danger={subConfirm === 'cancel-on' || subConfirm === 'downgrade'}
+          onConfirm={() => runSubAction(subConfirm)}
+          onClose={() => setSubConfirm(null)}
+        />
+      )}
       {showChangeSub && subscription && (
         <ChangeSubscriptionModal
           churchId={church.id}

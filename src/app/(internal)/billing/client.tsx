@@ -60,10 +60,7 @@ export function BillingClient({ rows }: { rows: ChurchBillingRow[] }) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary">Billing</h1>
-        <p className="mt-1 text-sm text-text-secondary">Status langganan {rows.length} gereja</p>
-      </div>
+      <p className="text-sm text-text-secondary">Status langganan {rows.length} gereja</p>
 
       <div className="flex flex-wrap items-center gap-3">
         <SearchInput
