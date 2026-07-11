@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { applyManualSubscriptionChangeAction } from '@/services/billing.actions';
 import type { ChurchPlanOption } from '@/types/internal.types';
 
-const TIER_RANK: Record<string, number> = { free: 0, plus: 1, pro: 2, custom: 3 };
+const TIER_RANK: Record<string, number> = { free: 0, plus: 1, pro: 2 };
 const idr = (n: number | null) =>
   n == null ? 'Gratis' : 'Rp' + new Intl.NumberFormat('id-ID').format(n);
 const intervalLabel = (i: string) => (i === 'year' ? 'tahun' : 'bulan');
@@ -113,6 +113,7 @@ export function ChangeSubscriptionModal({
             <p className="rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
               Menurunkan tier — anggota yang melebihi limit paket baru tetap ada, namun penambahan
               anggota/admin baru akan terblokir hingga di bawah limit.
+              {selected?.tier === 'free' && ' Turun ke Free menghapus semua paket kapasitas (add-on).'}
             </p>
           )}
           {error && <p className="text-sm text-danger">{error}</p>}

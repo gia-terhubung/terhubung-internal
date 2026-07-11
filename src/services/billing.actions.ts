@@ -5,13 +5,13 @@ import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
 import type {
   ActionResult,
+  ApplyAddonChangeInput,
   ApplySubscriptionChangeInput,
   RenewSubscriptionInput,
-  UpdateQuoteInput,
 } from '@/types/internal.types';
 
 // Tier ordering for deciding upgraded vs downgraded vs renewed.
-const TIER_RANK: Record<string, number> = { free: 0, plus: 1, pro: 2, custom: 3 };
+const TIER_RANK: Record<string, number> = { free: 0, plus: 1, pro: 2 };
 
 // Manually move a church up or down a tier. Wraps the
 // billing.apply_manual_subscription_change RPC, which swaps the plan, clears any
@@ -277,51 +277,37 @@ export async function retryOutboxEmailAction(input: { outboxId: string }): Promi
   return { ok: true };
 }
 
-// Custom-quote transitions. Optimistic concurrency via the status guard in the
-// WHERE clause: 0 rows updated = someone else already moved it.
-// Accepting does NOT change the subscription — apply the custom plan via
-// "Ubah Paket" on the church page.
-export async function updateQuoteAction(input: UpdateQuoteInput): Promise<ActionResult> {
+// Set a church's TOTAL capacity add-on count (absolute-set semantics, not a
+// delta). Wraps the billing.apply_addon_change RPC, which validates the tier
+// and subscription status, optionally records a payment, and logs an
+// addon_changed event.
+export async function applyAddonChangeAction(input: ApplyAddonChangeInput): Promise<ActionResult> {
   await requireInternalAdmin();
-  if (!input.quoteId) return { ok: false, error: 'Data tidak lengkap.' };
 
-  const patch: Record<string, unknown> = {
-    status: input.status,
-    updated_at: new Date().toISOString(),
-  };
-  let allowedFrom: string[];
-
-  if (input.status === 'quoted') {
-    if (
-      input.quotedPriceIdr == null ||
-      !Number.isInteger(input.quotedPriceIdr) ||
-      input.quotedPriceIdr <= 0
-    ) {
-      return { ok: false, error: 'Harga penawaran harus angka bulat positif.' };
-    }
-    patch.quoted_price_idr = input.quotedPriceIdr;
-    patch.expires_at = input.expiresAt || null;
-    patch.notes = input.notes?.trim() || null;
-    allowedFrom = ['pending', 'quoted'];
-  } else if (input.status === 'accepted') {
-    allowedFrom = ['quoted'];
-  } else {
-    allowedFrom = ['pending', 'quoted'];
+  if (!input.churchId) return { ok: false, error: 'Data tidak lengkap.' };
+  if (!Number.isInteger(input.addonCount) || input.addonCount < 0) {
+    return { ok: false, error: 'Jumlah add-on harus angka bulat ≥ 0.' };
   }
+
+  let amountIdr: number | null = null;
+  if (input.amountIdr != null) {
+    if (!Number.isInteger(input.amountIdr) || input.amountIdr <= 0) {
+      return { ok: false, error: 'Jumlah pembayaran tidak valid.' };
+    }
+    amountIdr = input.amountIdr;
+  }
+  const paymentRef = input.paymentRef?.trim() || null;
 
   const admin = createAdminClient();
-  const { data, error } = await admin
-    .schema('billing')
-    .from('custom_subscription_quotes')
-    .update(patch)
-    .eq('id', input.quoteId)
-    .in('status', allowedFrom)
-    .select('id');
+  const { error } = await admin.schema('billing').rpc('apply_addon_change', {
+    p_church_id: input.churchId,
+    p_addon_count: input.addonCount,
+    p_amount_idr: amountIdr,
+    p_payment_ref: paymentRef,
+  });
   if (error) return { ok: false, error: error.message };
-  if (!data || data.length === 0) {
-    return { ok: false, error: 'Status penawaran sudah berubah.' };
-  }
 
-  revalidatePath('/billing/quotes');
+  revalidatePath(`/churches/${input.churchId}`);
+  revalidatePath('/billing');
   return { ok: true };
 }

@@ -1,7 +1,7 @@
 export type SubscriptionInterval = 'month' | 'year';
 export type SubscriptionScope = 'church' | 'user';
 export type PaymentProvider = 'midtrans' | 'iap_apple' | 'iap_google' | 'manual';
-export type ChurchTier = 'free' | 'plus' | 'pro' | 'custom';
+export type ChurchTier = 'free' | 'plus' | 'pro';
 
 export interface ChurchSubscription {
   church_id: string;

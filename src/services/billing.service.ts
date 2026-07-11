@@ -11,9 +11,9 @@ import type {
   ChurchPlanOption,
   PaymentAuditRow,
   EventAuditRow,
-  QuoteRow,
   OutboxRow,
   PlanRateRow,
+  AddonPlanRow,
 } from '@/types/internal.types';
 
 // PostgREST can't embed public.churches from billing.* queries (cross-schema),
@@ -123,7 +123,7 @@ export async function getChurchSubscription(churchId: string): Promise<ChurchSub
     .schema('billing')
     .from('church_subscriptions')
     .select(
-      'tier, interval, current_period_end, grace_days, provider, cancel_at_period_end, started_at, features, plan_id, pending_plan_id, pending_change_at, pending_apply_error'
+      'tier, interval, current_period_end, grace_days, provider, cancel_at_period_end, started_at, features, plan_id, addon_count, pending_plan_id, pending_change_at, pending_apply_error'
     )
     .eq('church_id', churchId)
     .maybeSingle();
@@ -135,11 +135,12 @@ export async function getChurchSubscription(churchId: string): Promise<ChurchSub
   let price_idr: number | null = null;
   let member_limit: number | null = null;
   let admin_limit: number | null = null;
+  let sympathizer_limit: number | null = null;
   if (s.plan_id) {
     const { data: plan } = await admin
       .schema('billing')
       .from('subscription_plans')
-      .select('price_idr, member_limit, admin_limit')
+      .select('price_idr, member_limit, admin_limit, sympathizer_limit')
       .eq('id', s.plan_id)
       .maybeSingle();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -147,6 +148,7 @@ export async function getChurchSubscription(churchId: string): Promise<ChurchSub
     price_idr = p?.price_idr ?? null;
     member_limit = p?.member_limit ?? null;
     admin_limit = p?.admin_limit ?? null;
+    sympathizer_limit = p?.sympathizer_limit ?? null;
   }
 
   // Resolve the scheduled plan's tier/interval for the pending-change banner.
@@ -166,10 +168,40 @@ export async function getChurchSubscription(churchId: string): Promise<ChurchSub
   }
 
   const cpe = String(s.current_period_end);
+  const status = computeStatus(cpe, s.grace_days ?? 0);
+
+  // Effective caps: plan limit + addon_count × bonus while a plus/pro
+  // subscription is active/grace. Null (unlimited) base limits stay null.
+  const addon_count: number = s.addon_count ?? 0;
+  let effective_member_limit = member_limit;
+  let effective_sympathizer_limit = sympathizer_limit;
+  if (
+    addon_count > 0 &&
+    (s.tier === 'plus' || s.tier === 'pro') &&
+    (status === 'active' || status === 'grace')
+  ) {
+    const { data: addon } = await admin
+      .schema('billing')
+      .from('addon_plans')
+      .select('member_bonus, sympathizer_bonus')
+      .eq('code', 'cap_boost_50')
+      .eq('interval', 'month')
+      .is('effective_until', null)
+      .maybeSingle();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const a = addon as any;
+    if (a) {
+      if (member_limit != null) effective_member_limit = member_limit + addon_count * a.member_bonus;
+      if (sympathizer_limit != null) {
+        effective_sympathizer_limit = sympathizer_limit + addon_count * a.sympathizer_bonus;
+      }
+    }
+  }
+
   return {
     tier: s.tier,
     interval: s.interval,
-    status: computeStatus(cpe, s.grace_days ?? 0),
+    status,
     current_period_end: cpe,
     grace_days: s.grace_days ?? 0,
     provider: s.provider ?? null,
@@ -179,6 +211,10 @@ export async function getChurchSubscription(churchId: string): Promise<ChurchSub
     price_idr,
     member_limit,
     admin_limit,
+    sympathizer_limit,
+    addon_count,
+    effective_member_limit,
+    effective_sympathizer_limit,
     pending_plan_id: s.pending_plan_id ?? null,
     pending_change_at: s.pending_change_at ? String(s.pending_change_at) : null,
     pending_apply_error: s.pending_apply_error ?? null,
@@ -246,36 +282,6 @@ export async function listRecentEvents(): Promise<EventAuditRow[]> {
   }));
 }
 
-/** Custom-tier quotes, newest first (client filters default to open ones). */
-export async function listQuotes(): Promise<QuoteRow[]> {
-  await requireInternalAdmin();
-  const admin = createAdminClient();
-
-  const { data, error } = await admin
-    .schema('billing')
-    .from('custom_subscription_quotes')
-    .select('id, church_id, member_count, quoted_price_idr, status, expires_at, notes, created_at, updated_at')
-    .order('created_at', { ascending: false })
-    .limit(100);
-  if (error) throw new Error(error.message);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows = (data ?? []) as any[];
-  const names = await churchNameMap(rows.map((r) => r.church_id));
-  return rows.map((r) => ({
-    id: r.id,
-    church_id: r.church_id,
-    church_name: names.get(r.church_id) ?? '—',
-    member_count: r.member_count,
-    quoted_price_idr: r.quoted_price_idr ?? null,
-    status: r.status,
-    expires_at: r.expires_at ? String(r.expires_at) : null,
-    notes: r.notes ?? null,
-    created_at: String(r.created_at),
-    updated_at: String(r.updated_at),
-  }));
-}
-
 /** Billing email outbox — pending + failed rows awaiting the dispatcher. */
 export async function listOutbox(): Promise<OutboxRow[]> {
   await requireInternalAdmin();
@@ -316,7 +322,7 @@ export async function listPlanRateCard(): Promise<PlanRateRow[]> {
     .schema('billing')
     .from('subscription_plans')
     .select(
-      'id, scope, tier, interval, price_idr, member_limit, admin_limit, staff_limit, management_limit, finance_limit, features'
+      'id, scope, tier, interval, price_idr, member_limit, sympathizer_limit, admin_limit, staff_limit, management_limit, finance_limit, features'
     )
     .is('effective_until', null)
     .order('scope', { ascending: true })
@@ -324,6 +330,22 @@ export async function listPlanRateCard(): Promise<PlanRateRow[]> {
   if (error) throw new Error(error.message);
 
   return (data as PlanRateRow[]) ?? [];
+}
+
+/** Live capacity add-on plans. Read-only — add-on pricing edits stay SQL-only. */
+export async function listAddonPlans(): Promise<AddonPlanRow[]> {
+  await requireInternalAdmin();
+  const admin = createAdminClient();
+
+  const { data, error } = await admin
+    .schema('billing')
+    .from('addon_plans')
+    .select('id, code, interval, price_idr, member_bonus, sympathizer_bonus')
+    .is('effective_until', null)
+    .order('interval', { ascending: true });
+  if (error) throw new Error(error.message);
+
+  return (data as AddonPlanRow[]) ?? [];
 }
 
 /** Active church plans, cheapest first — for the manual promote/demote picker. */

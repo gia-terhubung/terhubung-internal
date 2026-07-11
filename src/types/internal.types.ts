@@ -96,6 +96,12 @@ export interface ChurchSubscriptionInfo {
   price_idr: number | null;
   member_limit: number | null;
   admin_limit: number | null;
+  sympathizer_limit: number | null;
+  // Capacity add-ons: effective = plan limit + addon_count × bonus while the
+  // tier is plus/pro and the subscription is active/grace.
+  addon_count: number;
+  effective_member_limit: number | null;
+  effective_sympathizer_limit: number | null;
   // Scheduled change (applied by the billing cron at pending_change_at).
   pending_plan_id: string | null;
   pending_change_at: string | null;
@@ -151,28 +157,22 @@ export interface EventAuditRow {
   event_occurred_at: string;
 }
 
-// Custom subscription quotes (billing.custom_subscription_quotes).
-export type QuoteStatus = 'pending' | 'quoted' | 'accepted' | 'rejected' | 'obsolete' | 'expired';
-
-export interface QuoteRow {
+// Live capacity add-on plan (billing.addon_plans, read-only rate card).
+export interface AddonPlanRow {
   id: string;
-  church_id: string;
-  church_name: string;
-  member_count: number;
-  quoted_price_idr: number | null;
-  status: QuoteStatus;
-  expires_at: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
+  code: string;
+  interval: string;
+  price_idr: number;
+  member_bonus: number;
+  sympathizer_bonus: number;
 }
 
-export interface UpdateQuoteInput {
-  quoteId: string;
-  status: 'quoted' | 'accepted' | 'rejected';
-  quotedPriceIdr?: number | null;
-  expiresAt?: string | null;
-  notes?: string | null;
+// Manual add-on change payload — sets the church's new TOTAL add-on count.
+export interface ApplyAddonChangeInput {
+  churchId: string;
+  addonCount: number;
+  amountIdr?: number | null; // optional manually-collected payment
+  paymentRef?: string | null;
 }
 
 // Billing email outbox monitor (pending/failed only).
@@ -197,6 +197,7 @@ export interface PlanRateRow {
   interval: string;
   price_idr: number | null;
   member_limit: number | null;
+  sympathizer_limit: number | null;
   admin_limit: number | null;
   staff_limit: number | null;
   management_limit: number | null;

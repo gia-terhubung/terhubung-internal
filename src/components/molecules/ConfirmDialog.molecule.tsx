@@ -3,7 +3,7 @@
 import { useState } from 'react';
 
 // Generic confirmation modal for one-click state changes (cancel toggle,
-// downgrade, reset, retry, quote transitions, moderation actions).
+// downgrade, reset, retry, moderation actions).
 export function ConfirmDialog({
   title,
   message,

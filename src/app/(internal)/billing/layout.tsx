@@ -4,7 +4,6 @@ const TABS = [
   { href: '/billing', label: 'Status', exact: true },
   { href: '/billing/payments', label: 'Pembayaran' },
   { href: '/billing/events', label: 'Event' },
-  { href: '/billing/quotes', label: 'Penawaran' },
   { href: '/billing/outbox', label: 'Email' },
   { href: '/billing/plans', label: 'Paket' },
 ];

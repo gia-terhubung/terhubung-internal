@@ -28,7 +28,7 @@ interface RawAnalytics {
 
 // Fallback ranking so the tier bar reads cheap → expensive even though tier
 // strings are free text in the DB; unknown tiers sort last, alphabetically.
-const TIER_ORDER: Record<string, number> = { free: 0, plus: 1, pro: 2, custom: 3 };
+const TIER_ORDER: Record<string, number> = { free: 0, plus: 1, pro: 2 };
 
 // Analytics are aggregate queries over the whole DB — cache for 5 minutes.
 // requireInternalAdmin() must stay OUTSIDE this wrapper (cookies are illegal

@@ -7,6 +7,7 @@ import { AssignChurchAdminModal } from '@/components/organisms/AssignChurchAdmin
 import { EditChurchContactModal } from '@/components/organisms/EditChurchContactModal.organism';
 import { EditChurchLocationModal } from '@/components/organisms/EditChurchLocationModal.organism';
 import { ChangeSubscriptionModal } from '@/components/organisms/ChangeSubscriptionModal.organism';
+import { AddonChangeModal } from '@/components/organisms/AddonChangeModal.organism';
 import { RenewSubscriptionModal } from '@/components/organisms/RenewSubscriptionModal.organism';
 import { ConfirmDialog } from '@/components/molecules/ConfirmDialog.molecule';
 import { Avatar } from '@/components/atoms/Avatar.atom';
@@ -27,6 +28,17 @@ import type {
 const idr = (n: number | null) =>
   n == null ? '—' : 'Rp' + new Intl.NumberFormat('id-ID').format(n);
 const intervalLabel = (i: string) => (i === 'year' ? 'tahun' : i === 'month' ? 'bulan' : i);
+
+// Effective cap with a base + add-on hint whenever add-ons exist ("+ 0 add-on"
+// is deliberate: it explains why effective == base despite paid add-ons, e.g.
+// expired subscription).
+const capLabel = (base: number | null, effective: number | null, addonCount: number) => {
+  if (effective == null) return 'Tak terbatas';
+  if (addonCount > 0 && base != null) {
+    return `${effective} (${base} + ${effective - base} add-on)`;
+  }
+  return String(effective);
+};
 
 const STATUS: Record<BillingStatus, { label: string; variant: 'success' | 'warning' | 'danger' | 'secondary' }> = {
   active: { label: 'Aktif', variant: 'success' },
@@ -71,6 +83,7 @@ export function ChurchDetailClient({
   const [showEditContact, setShowEditContact] = useState(false);
   const [showEditLocation, setShowEditLocation] = useState(false);
   const [showChangeSub, setShowChangeSub] = useState(false);
+  const [showAddon, setShowAddon] = useState(false);
   const [showRenew, setShowRenew] = useState(false);
   const [subConfirm, setSubConfirm] = useState<'cancel-on' | 'cancel-off' | 'downgrade' | 'reset' | null>(null);
   const [subError, setSubError] = useState<string | null>(null);
@@ -207,6 +220,16 @@ export function ChurchDetailClient({
                 Ubah Paket
               </button>
             )}
+            {subscription &&
+              (subscription.tier === 'plus' || subscription.tier === 'pro') &&
+              (subscription.status === 'active' || subscription.status === 'grace') && (
+              <button
+                onClick={() => setShowAddon(true)}
+                className="rounded-lg bg-bg-hover px-3 py-1.5 text-sm text-text-primary hover:bg-bg-tertiary"
+              >
+                Ubah Add-on
+              </button>
+            )}
           </div>
         </div>
         {subscription?.pending_plan_id && (
@@ -274,7 +297,30 @@ export function ChurchDetailClient({
                   </span>
                 }
               />
-              <Field label="Limit anggota" value={subscription.member_limit ?? 'Tak terbatas'} />
+              <Field
+                label="Limit anggota"
+                value={
+                  capLabel(
+                    subscription.member_limit,
+                    subscription.effective_member_limit,
+                    subscription.addon_count
+                  ) + (subscription.status === 'expired' ? ' (kedaluwarsa — batas Free berlaku)' : '')
+                }
+              />
+              <Field
+                label="Limit simpatisan"
+                value={
+                  capLabel(
+                    subscription.sympathizer_limit,
+                    subscription.effective_sympathizer_limit,
+                    subscription.addon_count
+                  ) + (subscription.status === 'expired' ? ' (kedaluwarsa — batas Free berlaku)' : '')
+                }
+              />
+              <Field
+                label="Add-on kapasitas"
+                value={`${subscription.addon_count} paket (+50 anggota, +50 simpatisan per paket)`}
+              />
             </div>
             {features.length > 0 && (
               <div className="mt-4">
@@ -425,6 +471,13 @@ export function ChurchDetailClient({
           currentInterval={subscription.interval}
           plans={plans}
           onClose={() => setShowChangeSub(false)}
+        />
+      )}
+      {showAddon && subscription && (
+        <AddonChangeModal
+          churchId={church.id}
+          currentAddonCount={subscription.addon_count}
+          onClose={() => setShowAddon(false)}
         />
       )}
       {showEditContact && (
