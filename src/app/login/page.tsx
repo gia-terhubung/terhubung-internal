@@ -25,8 +25,8 @@ function LoginForm() {
       ? 'Akun ini tidak memiliki akses internal.'
       : urlError === 'domain'
       ? `Hanya email ${ALLOWED_DOMAIN} yang diizinkan.`
-      : urlError === 'timeout'
-      ? 'Sesi berakhir karena tidak aktif. Silakan masuk lagi.'
+      : urlError === 'expired'
+      ? 'Sesi berakhir. Silakan masuk kembali.'
       : null;
 
   async function requestCode(e: React.FormEvent) {

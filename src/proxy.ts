@@ -37,29 +37,38 @@ export async function proxy(request: NextRequest) {
 
   const isAuthRoute = request.nextUrl.pathname.startsWith('/login');
 
-  // App-scoped idle timeout (8h). Lives only in the internal app's proxy +
-  // its own cookie, so mobile/other apps on the shared project are unaffected.
+  // App-scoped absolute session cap (1h). Lives only in the internal app's
+  // proxy + its own cookie, so mobile/other apps on the shared project are
+  // unaffected. Anchored to claims.session_id, which survives refresh-token
+  // rotation and only changes on a new login.
   if (claims) {
-    const IDLE_MS = 8 * 60 * 60 * 1000;
-    const last = request.cookies.get('internal_last_active')?.value;
+    const MAX_SESSION_MS = 60 * 60 * 1000;
+    const anchor = request.cookies.get('internal_session_start')?.value;
+    const [anchorSid, anchorStart] = anchor?.split(':') ?? [];
     const now = Date.now();
-    if (last && now - Number(last) > IDLE_MS) {
+    if (anchorSid === claims.session_id && anchorStart && now - Number(anchorStart) > MAX_SESSION_MS) {
       await supabase.auth.signOut({ scope: 'local' });
       const url = request.nextUrl.clone();
       url.pathname = '/login';
-      url.search = 'error=timeout';
+      url.search = 'error=expired';
       const res = NextResponse.redirect(url);
       supabaseResponse.cookies.getAll().forEach((c) =>
         res.cookies.set(c.name, c.value, { ...c, path: '/' })
       );
-      res.cookies.set('internal_last_active', '', { path: '/', maxAge: 0 });
+      res.cookies.set('internal_session_start', '', { path: '/', maxAge: 0 });
       return res;
     }
-    supabaseResponse.cookies.set('internal_last_active', String(now), {
-      httpOnly: true,
-      sameSite: 'lax',
-      path: '/',
-    });
+    if (anchorSid !== claims.session_id || !anchorStart) {
+      supabaseResponse.cookies.set('internal_session_start', `${claims.session_id}:${now}`, {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+      });
+    }
+    // Retire the old idle-timeout cookie.
+    if (request.cookies.get('internal_last_active')) {
+      supabaseResponse.cookies.set('internal_last_active', '', { path: '/', maxAge: 0 });
+    }
   }
 
   // Not logged in → bounce to /login (except the login page).
