@@ -1,49 +1,52 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState, useTransition } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { CreateChurchModal } from '@/components/organisms/CreateChurchModal.organism';
 import { SearchInput } from '@/components/atoms/SearchInput.atom';
 import { Pagination } from '@/components/molecules/Pagination.molecule';
-import type { ChurchRow } from '@/services/church.service';
-
-const PAGE_SIZE = 15;
-type Sort = 'recent' | 'oldest' | 'name';
+import { PAGE_SIZE } from '@/libs/pagination';
+import type { ChurchRow, ChurchSort } from '@/services/church.service';
 
 const selectCls =
   'rounded-lg border border-border-color bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none focus:border-brand';
 
-export function ChurchesClient({ initialChurches }: { initialChurches: ChurchRow[] }) {
-  const [search, setSearch] = useState('');
-  const [sort, setSort] = useState<Sort>('recent');
-  const [page, setPage] = useState(1);
+interface Props {
+  rows: ChurchRow[];
+  total: number;
+  page: number;
+  search: string;
+  sort: ChurchSort;
+}
+
+export function ChurchesClient({ rows, total, page, search, sort }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [isPending, startTransition] = useTransition();
   const [showCreate, setShowCreate] = useState(false);
 
-  const processed = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const rows = q
-      ? initialChurches.filter(
-          (c) => c.name.toLowerCase().includes(q) || (c.city ?? '').toLowerCase().includes(q)
-        )
-      : [...initialChurches];
-    rows.sort((a, b) => {
-      if (sort === 'name') return a.name.localeCompare(b.name);
-      const ta = new Date(a.created_at).getTime();
-      const tb = new Date(b.created_at).getTime();
-      return sort === 'oldest' ? ta - tb : tb - ta;
-    });
-    return rows;
-  }, [initialChurches, search, sort]);
+  // All list state lives in the URL; changing q/sort resets to page 1.
+  function setParams(next: { q?: string; sort?: ChurchSort; page?: number }) {
+    const sp = new URLSearchParams();
+    const q = next.q ?? search;
+    const s = next.sort ?? sort;
+    const p = next.page ?? 1;
+    if (q) sp.set('q', q);
+    if (s !== 'recent') sp.set('sort', s);
+    if (p > 1) sp.set('page', String(p));
+    const qs = sp.toString();
+    startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
+  }
 
-  const totalPages = Math.max(1, Math.ceil(processed.length / PAGE_SIZE));
-  const pageRows = processed.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-text-primary">Gereja</h1>
-          <p className="mt-1 text-sm text-text-secondary">{initialChurches.length} gereja terdaftar</p>
+          <p className="mt-1 text-sm text-text-secondary">{total} gereja terdaftar</p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
@@ -56,17 +59,18 @@ export function ChurchesClient({ initialChurches }: { initialChurches: ChurchRow
       <div className="flex flex-wrap items-center gap-3">
         <SearchInput
           placeholder="Cari nama atau kota…"
-          onSearch={(v) => { setSearch(v); setPage(1); }}
+          defaultValue={search}
+          onSearch={(v) => setParams({ q: v })}
           containerClassName="w-full max-w-xs"
         />
-        <select value={sort} onChange={(e) => { setSort(e.target.value as Sort); setPage(1); }} className={selectCls}>
+        <select value={sort} onChange={(e) => setParams({ sort: e.target.value as ChurchSort })} className={selectCls}>
           <option value="recent">Terbaru</option>
           <option value="oldest">Terlama</option>
           <option value="name">Nama (A–Z)</option>
         </select>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-border-color">
+      <div className={`overflow-hidden rounded-xl border border-border-color ${isPending ? 'opacity-60 transition-opacity' : ''}`}>
         <table className="w-full text-sm">
           <thead className="bg-bg-secondary text-left text-text-secondary">
             <tr>
@@ -78,14 +82,14 @@ export function ChurchesClient({ initialChurches }: { initialChurches: ChurchRow
             </tr>
           </thead>
           <tbody>
-            {pageRows.length === 0 ? (
+            {rows.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-text-secondary">
                   Tidak ada gereja.
                 </td>
               </tr>
             ) : (
-              pageRows.map((c, i) => (
+              rows.map((c, i) => (
                 <tr key={c.id} className="border-t border-border-color hover:bg-bg-secondary">
                   <td className="px-4 py-3 text-text-secondary">{(page - 1) * PAGE_SIZE + i + 1}</td>
                   <td className="px-4 py-3">
@@ -103,7 +107,7 @@ export function ChurchesClient({ initialChurches }: { initialChurches: ChurchRow
             )}
           </tbody>
         </table>
-        <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+        <Pagination currentPage={page} totalPages={totalPages} onPageChange={(p) => setParams({ page: p })} />
       </div>
 
       {showCreate && <CreateChurchModal onClose={() => setShowCreate(false)} />}

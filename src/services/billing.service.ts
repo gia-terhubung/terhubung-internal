@@ -1,6 +1,7 @@
 import 'server-only';
 import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
+import { clampPage, escapeLike, orIlike, pageRange, type Paged } from '@/libs/pagination';
 import type {
   ChurchBillingRow,
   BillingStatus,
@@ -25,6 +26,28 @@ async function churchNameMap(ids: (string | null)[]): Promise<Map<string, string
   const { data, error } = await admin.from('churches').select('id, name').in('id', unique);
   if (error) throw new Error(error.message);
   return new Map(((data ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
+}
+
+// Church-name search for billing.* lists (same cross-schema limitation): resolve
+// matching church ids first, then filter with church_id.in.(...). Capped — a
+// search matching >100 churches only surfaces rows for the first 100.
+async function searchChurchIds(raw: string, cap = 100): Promise<string[]> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from('churches')
+    .select('id')
+    .ilike('name', `%${escapeLike(raw)}%`)
+    .limit(cap);
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as { id: string }[]).map((c) => c.id);
+}
+
+// Combined .or() filter: local ILIKE columns + church-name matches by id.
+async function billingSearchFilter(localColumns: string[], search: string): Promise<string> {
+  let filter = orIlike(localColumns, search);
+  const churchIds = await searchChurchIds(search);
+  if (churchIds.length) filter += `,church_id.in.(${churchIds.join(',')})`;
+  return filter;
 }
 
 const DAY_MS = 86_400_000;
@@ -223,94 +246,168 @@ export async function getChurchSubscription(churchId: string): Promise<ChurchSub
   };
 }
 
-/** Global payments audit — most recent 50 across all churches. */
-export async function listRecentPayments(): Promise<PaymentAuditRow[]> {
+/** Global payments audit — server-paginated, newest first. */
+export async function listRecentPaymentsPage(params: {
+  page: number;
+  search: string;
+}): Promise<Paged<PaymentAuditRow>> {
   await requireInternalAdmin();
   const admin = createAdminClient();
+  const { search } = params;
 
-  const { data, error } = await admin
+  const filter = search ? await billingSearchFilter(['provider', 'provider_payment_id'], search) : '';
+
+  let countQuery = admin.schema('billing').from('payments').select('id', { count: 'exact', head: true });
+  if (filter) countQuery = countQuery.or(filter);
+  const { count, error: countError } = await countQuery;
+  if (countError) throw new Error(countError.message);
+  const total = count ?? 0;
+
+  const page = clampPage(params.page, total);
+  const { from, to } = pageRange(page);
+
+  let rowsQuery = admin
     .schema('billing')
     .from('payments')
-    .select('id, church_id, provider, provider_payment_id, amount_idr, currency, status, created_at')
+    .select('id, church_id, provider, provider_payment_id, amount_idr, currency, status, created_at');
+  if (filter) rowsQuery = rowsQuery.or(filter);
+  const { data, error } = await rowsQuery
     .order('created_at', { ascending: false })
-    .limit(50);
+    .order('id')
+    .range(from, to);
   if (error) throw new Error(error.message);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows = (data ?? []) as any[];
   const names = await churchNameMap(rows.map((r) => r.church_id));
-  return rows.map((r) => ({
-    id: r.id,
-    church_id: r.church_id ?? null,
-    church_name: r.church_id ? (names.get(r.church_id) ?? '—') : '—',
-    provider: r.provider,
-    provider_payment_id: r.provider_payment_id ?? null,
-    amount_idr: r.amount_idr,
-    currency: r.currency,
-    status: r.status,
-    created_at: String(r.created_at),
-  }));
+  return {
+    rows: rows.map((r) => ({
+      id: r.id,
+      church_id: r.church_id ?? null,
+      church_name: r.church_id ? (names.get(r.church_id) ?? '—') : '—',
+      provider: r.provider,
+      provider_payment_id: r.provider_payment_id ?? null,
+      amount_idr: r.amount_idr,
+      currency: r.currency,
+      status: r.status,
+      created_at: String(r.created_at),
+    })),
+    total,
+    page,
+  };
 }
 
-/** Global subscription-events audit — most recent 50. */
-export async function listRecentEvents(): Promise<EventAuditRow[]> {
+/** Global subscription-events audit — server-paginated, newest first. */
+export async function listRecentEventsPage(params: {
+  page: number;
+  search: string;
+}): Promise<Paged<EventAuditRow>> {
   await requireInternalAdmin();
   const admin = createAdminClient();
+  const { search } = params;
 
-  const { data, error } = await admin
+  const filter = search ? await billingSearchFilter(['event_type'], search) : '';
+
+  let countQuery = admin
+    .schema('billing')
+    .from('subscription_events')
+    .select('id', { count: 'exact', head: true })
+    .not('church_id', 'is', null);
+  if (filter) countQuery = countQuery.or(filter);
+  const { count, error: countError } = await countQuery;
+  if (countError) throw new Error(countError.message);
+  const total = count ?? 0;
+
+  const page = clampPage(params.page, total);
+  const { from, to } = pageRange(page);
+
+  let rowsQuery = admin
     .schema('billing')
     .from('subscription_events')
     .select('id, church_id, event_type, from_tier, to_tier, amount_idr, provider, event_occurred_at')
-    .not('church_id', 'is', null)
+    .not('church_id', 'is', null);
+  if (filter) rowsQuery = rowsQuery.or(filter);
+  const { data, error } = await rowsQuery
     .order('event_occurred_at', { ascending: false })
-    .limit(50);
+    .order('id')
+    .range(from, to);
   if (error) throw new Error(error.message);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows = (data ?? []) as any[];
   const names = await churchNameMap(rows.map((r) => r.church_id));
-  return rows.map((r) => ({
-    id: r.id,
-    church_id: r.church_id,
-    church_name: names.get(r.church_id) ?? '—',
-    event_type: r.event_type,
-    from_tier: r.from_tier ?? null,
-    to_tier: r.to_tier ?? null,
-    amount_idr: r.amount_idr ?? null,
-    provider: r.provider ?? null,
-    event_occurred_at: String(r.event_occurred_at),
-  }));
+  return {
+    rows: rows.map((r) => ({
+      id: r.id,
+      church_id: r.church_id,
+      church_name: names.get(r.church_id) ?? '—',
+      event_type: r.event_type,
+      from_tier: r.from_tier ?? null,
+      to_tier: r.to_tier ?? null,
+      amount_idr: r.amount_idr ?? null,
+      provider: r.provider ?? null,
+      event_occurred_at: String(r.event_occurred_at),
+    })),
+    total,
+    page,
+  };
 }
 
-/** Billing email outbox — pending + failed rows awaiting the dispatcher. */
-export async function listOutbox(): Promise<OutboxRow[]> {
+/** Billing email outbox — pending + failed rows, server-paginated, newest first. */
+export async function listOutboxPage(params: {
+  page: number;
+  search: string;
+}): Promise<Paged<OutboxRow>> {
   await requireInternalAdmin();
   const admin = createAdminClient();
+  const { search } = params;
 
-  const { data, error } = await admin
+  const filter = search ? await billingSearchFilter(['to_email', 'subject'], search) : '';
+
+  let countQuery = admin
+    .schema('billing')
+    .from('email_outbox')
+    .select('id', { count: 'exact', head: true })
+    .in('status', ['pending', 'failed']);
+  if (filter) countQuery = countQuery.or(filter);
+  const { count, error: countError } = await countQuery;
+  if (countError) throw new Error(countError.message);
+  const total = count ?? 0;
+
+  const page = clampPage(params.page, total);
+  const { from, to } = pageRange(page);
+
+  let rowsQuery = admin
     .schema('billing')
     .from('email_outbox')
     .select('id, to_email, church_id, subject, status, attempts, last_error, sent_at, created_at')
-    .in('status', ['pending', 'failed'])
+    .in('status', ['pending', 'failed']);
+  if (filter) rowsQuery = rowsQuery.or(filter);
+  const { data, error } = await rowsQuery
     .order('created_at', { ascending: false })
-    .limit(100);
+    .order('id')
+    .range(from, to);
   if (error) throw new Error(error.message);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows = (data ?? []) as any[];
   const names = await churchNameMap(rows.map((r) => r.church_id));
-  return rows.map((r) => ({
-    id: r.id,
-    to_email: r.to_email,
-    church_id: r.church_id ?? null,
-    church_name: r.church_id ? (names.get(r.church_id) ?? null) : null,
-    subject: r.subject,
-    status: r.status,
-    attempts: r.attempts,
-    last_error: r.last_error ?? null,
-    sent_at: r.sent_at ? String(r.sent_at) : null,
-    created_at: String(r.created_at),
-  }));
+  return {
+    rows: rows.map((r) => ({
+      id: r.id,
+      to_email: r.to_email,
+      church_id: r.church_id ?? null,
+      church_name: r.church_id ? (names.get(r.church_id) ?? null) : null,
+      subject: r.subject,
+      status: r.status,
+      attempts: r.attempts,
+      last_error: r.last_error ?? null,
+      sent_at: r.sent_at ? String(r.sent_at) : null,
+      created_at: String(r.created_at),
+    })),
+    total,
+    page,
+  };
 }
 
 /** Read-only rate card: active plans (both scopes). Editing stays SQL-only. */

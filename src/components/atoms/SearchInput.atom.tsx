@@ -7,6 +7,9 @@ interface SearchInputProps {
   onSearch: (value: string) => void;
   debounceMs?: number;
   containerClassName?: string;
+  // Seed the input (e.g. from a ?q= URL param) without firing onSearch on mount.
+  defaultValue?: string;
+  autoFocus?: boolean;
 }
 
 export const SearchInput: React.FC<SearchInputProps> = ({
@@ -14,8 +17,10 @@ export const SearchInput: React.FC<SearchInputProps> = ({
   onSearch,
   debounceMs = 300,
   containerClassName,
+  defaultValue,
+  autoFocus,
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(defaultValue ?? '');
   const isMounted = useRef(false);
 
   useEffect(() => {
@@ -44,6 +49,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
         placeholder={placeholder}
+        autoFocus={autoFocus}
         className="w-full bg-bg-primary border border-border-color text-text-primary rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-brand transition-colors"
       />
     </div>

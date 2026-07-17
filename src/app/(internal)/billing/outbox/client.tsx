@@ -1,36 +1,41 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useTransition } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { Badge } from '@/components/atoms/Badge.atom';
 import { SearchInput } from '@/components/atoms/SearchInput.atom';
 import { Pagination } from '@/components/molecules/Pagination.molecule';
 import { ConfirmDialog } from '@/components/molecules/ConfirmDialog.molecule';
 import { retryOutboxEmailAction } from '@/services/billing.actions';
+import { PAGE_SIZE } from '@/libs/pagination';
 import type { OutboxRow } from '@/types/internal.types';
 
-const PAGE_SIZE = 15;
+interface Props {
+  rows: OutboxRow[];
+  total: number;
+  page: number;
+  search: string;
+}
 
-export function OutboxClient({ rows }: { rows: OutboxRow[] }) {
+export function OutboxClient({ rows, total, page, search }: Props) {
   const router = useRouter();
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
+  const pathname = usePathname();
+  const [isPending, startTransition] = useTransition();
   const [retryTarget, setRetryTarget] = useState<OutboxRow | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
-      (r) =>
-        r.to_email.toLowerCase().includes(q) ||
-        r.subject.toLowerCase().includes(q) ||
-        (r.church_name ?? '').toLowerCase().includes(q)
-    );
-  }, [rows, search]);
+  // All list state lives in the URL; changing q resets to page 1.
+  function setParams(next: { q?: string; page?: number }) {
+    const sp = new URLSearchParams();
+    const q = next.q ?? search;
+    const p = next.page ?? 1;
+    if (q) sp.set('q', q);
+    if (p > 1) sp.set('page', String(p));
+    const qs = sp.toString();
+    startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
+  }
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   async function retry(row: OutboxRow) {
     setError(null);
@@ -48,17 +53,18 @@ export function OutboxClient({ rows }: { rows: OutboxRow[] }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SearchInput
           placeholder="Cari email / subjek / gereja…"
-          onSearch={(v) => { setSearch(v); setPage(1); }}
+          defaultValue={search}
+          onSearch={(v) => setParams({ q: v })}
           containerClassName="w-full max-w-xs"
         />
         <span className="text-xs text-text-secondary">
-          Email menunggu & gagal — dikirim oleh dispatcher billing
+          {total} email menunggu & gagal — dikirim oleh dispatcher billing
         </span>
       </div>
 
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      <div className="overflow-hidden rounded-xl border border-border-color">
+      <div className={`overflow-hidden rounded-xl border border-border-color ${isPending ? 'opacity-60 transition-opacity' : ''}`}>
         <table className="w-full text-sm">
           <thead className="bg-bg-secondary text-left text-text-secondary">
             <tr>
@@ -71,14 +77,14 @@ export function OutboxClient({ rows }: { rows: OutboxRow[] }) {
             </tr>
           </thead>
           <tbody>
-            {pageRows.length === 0 ? (
+            {rows.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-text-secondary">
                   Outbox kosong — semua email terkirim.
                 </td>
               </tr>
             ) : (
-              pageRows.map((r) => (
+              rows.map((r) => (
                 <tr key={r.id} className="border-t border-border-color align-top">
                   <td className="px-4 py-3 text-text-secondary">
                     {new Date(r.created_at).toLocaleString('id-ID')}
@@ -116,7 +122,7 @@ export function OutboxClient({ rows }: { rows: OutboxRow[] }) {
             )}
           </tbody>
         </table>
-        <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+        <Pagination currentPage={page} totalPages={totalPages} onPageChange={(p) => setParams({ page: p })} />
       </div>
 
       {retryTarget && (

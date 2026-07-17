@@ -1,32 +1,37 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { searchAppUsersAction, assignChurchAdminAction } from '@/services/church.actions';
+import { SearchInput } from '@/components/atoms/SearchInput.atom';
 import type { AppUserResult } from '@/types/internal.types';
 
 export function AssignChurchAdminModal({ churchId, onClose }: { churchId: string; onClose: () => void }) {
   const router = useRouter();
   const [q, setQ] = useState('');
-  const [results, setResults] = useState<AppUserResult[]>([]);
+  const [loaded, setLoaded] = useState<{ query: string; results: AppUserResult[] } | null>(null);
   const [selected, setSelected] = useState<AppUserResult | null>(null);
-  const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function doSearch(e: React.FormEvent) {
-    e.preventDefault();
-    setSelected(null);
-    setError(null);
-    setSearching(true);
-    try {
-      setResults(await searchAppUsersAction(q));
-    } catch {
-      setError('Pencarian gagal.');
-    } finally {
-      setSearching(false);
-    }
-  }
+  // Live search on the debounced query; mount runs it with '' for the initial 10.
+  // The sequence counter discards stale responses so a fast type-then-clear can't
+  // leave old results on screen. `loaded` remembers which query the results belong
+  // to, so "searching" is derived instead of set synchronously in the effect.
+  const seq = useRef(0);
+  useEffect(() => {
+    const id = ++seq.current;
+    searchAppUsersAction(q)
+      .then((r) => {
+        if (id === seq.current) setLoaded({ query: q, results: r });
+      })
+      .catch(() => {
+        if (id === seq.current) setError('Pencarian gagal.');
+      });
+  }, [q]);
+
+  const searching = !error && loaded?.query !== q;
+  const results = loaded?.results ?? [];
 
   async function assign() {
     if (!selected) return;
@@ -53,24 +58,22 @@ export function AssignChurchAdminModal({ churchId, onClose }: { churchId: string
         </div>
 
         <div className="p-5">
-          <form onSubmit={doSearch} className="flex gap-2">
-            <input
-              autoFocus
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Cari nama pengguna terdaftar…"
-              className="flex-1 rounded-lg border border-border-color bg-bg-primary px-3 py-2 text-text-primary outline-none focus:border-brand"
-            />
-            <button type="submit" className="rounded-lg bg-bg-hover px-4 text-sm text-text-primary">
-              Cari
-            </button>
-          </form>
+          <SearchInput
+            autoFocus
+            placeholder="Cari nama pengguna terdaftar…"
+            onSearch={(v) => {
+              setQ(v);
+              setSelected(null);
+              setError(null);
+            }}
+            containerClassName="w-full"
+          />
 
           <div className="mt-3 max-h-56 overflow-y-auto rounded-lg border border-border-color bg-bg-primary">
             {searching ? (
               <div className="p-4 text-center text-sm text-text-secondary">Memuat…</div>
             ) : results.length === 0 ? (
-              <div className="p-4 text-center text-sm text-text-secondary">Ketik nama lalu tekan Cari.</div>
+              <div className="p-4 text-center text-sm text-text-secondary">Tidak ada pengguna ditemukan.</div>
             ) : (
               results.map((u) => (
                 <label

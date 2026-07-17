@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
 import { isValidEmail, isValidIdPhone } from '@/libs/contact';
+import { escapeLike } from '@/libs/pagination';
 import type { ActionResult, AppUserResult, CreateChurchInput } from '@/types/internal.types';
 
 // Feature A — create a church + its required contact atomically (free
@@ -58,21 +59,19 @@ export async function createChurchAction(input: CreateChurchInput): Promise<Acti
 }
 
 // Feature B (search) — find existing registered app users by name.
+// Empty query returns the first 10 alphabetically so the picker is never blank.
 export async function searchAppUsersAction(query: string): Promise<AppUserResult[]> {
   await requireInternalAdmin();
   const q = query.trim();
-  if (q.length < 2) return [];
-
-  // Escape LIKE metacharacters so a query of `%`/`_` matches those literals
-  // instead of acting as wildcards (\ is the default ILIKE escape char).
-  const pattern = q.replace(/[\\%_]/g, (c) => `\\${c}`);
 
   const admin = createAdminClient();
-  const { data: profiles, error } = await admin
+  let profilesQuery = admin
     .from('profiles')
     .select('id, full_name, avatar_url')
-    .ilike('full_name', `%${pattern}%`)
+    .order('full_name', { ascending: true })
     .limit(10);
+  if (q) profilesQuery = profilesQuery.ilike('full_name', `%${escapeLike(q)}%`);
+  const { data: profiles, error } = await profilesQuery;
   if (error) throw new Error(error.message);
 
   const ids = (profiles ?? []).map((p) => p.id);
