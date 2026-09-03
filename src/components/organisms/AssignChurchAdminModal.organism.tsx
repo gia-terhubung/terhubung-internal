@@ -9,29 +9,31 @@ import type { AppUserResult } from '@/types/internal.types';
 export function AssignChurchAdminModal({ churchId, onClose }: { churchId: string; onClose: () => void }) {
   const router = useRouter();
   const [q, setQ] = useState('');
-  const [loaded, setLoaded] = useState<{ query: string; results: AppUserResult[] } | null>(null);
+  const [loaded, setLoaded] = useState<{ query: string; results: AppUserResult[] }>({ query: '', results: [] });
   const [selected, setSelected] = useState<AppUserResult | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Live search on the debounced query; mount runs it with '' for the initial 10.
-  // The sequence counter discards stale responses so a fast type-then-clear can't
-  // leave old results on screen. `loaded` remembers which query the results belong
-  // to, so "searching" is derived instead of set synchronously in the effect.
+  // Live search on the debounced query. An empty query never reaches the server
+  // — clearing the box resets `loaded` in the onSearch handler below. The
+  // sequence counter discards stale responses so a fast type-then-clear can't
+  // leave old results on screen. `loaded` remembers which query the results
+  // belong to, so "searching" is derived instead of set synchronously here.
   const seq = useRef(0);
   useEffect(() => {
+    if (!q) return;
     const id = ++seq.current;
-    searchAppUsersAction(q)
+    searchAppUsersAction(q, churchId)
       .then((r) => {
         if (id === seq.current) setLoaded({ query: q, results: r });
       })
       .catch(() => {
         if (id === seq.current) setError('Pencarian gagal.');
       });
-  }, [q]);
+  }, [q, churchId]);
 
-  const searching = !error && loaded?.query !== q;
-  const results = loaded?.results ?? [];
+  const searching = !error && loaded.query !== q;
+  const results = loaded.results;
 
   async function assign() {
     if (!selected) return;
@@ -46,8 +48,6 @@ export function AssignChurchAdminModal({ churchId, onClose }: { churchId: string
     onClose();
     router.refresh();
   }
-
-  const otherChurch = selected?.current_church_id && selected.current_church_id !== churchId;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -65,6 +65,10 @@ export function AssignChurchAdminModal({ churchId, onClose }: { churchId: string
               setQ(v);
               setSelected(null);
               setError(null);
+              if (!v) {
+                seq.current++; // discard any in-flight response
+                setLoaded({ query: '', results: [] });
+              }
             }}
             containerClassName="w-full"
           />
@@ -72,6 +76,8 @@ export function AssignChurchAdminModal({ churchId, onClose }: { churchId: string
           <div className="mt-3 max-h-56 overflow-y-auto rounded-lg border border-border-color bg-bg-primary">
             {searching ? (
               <div className="p-4 text-center text-sm text-text-secondary">Memuat…</div>
+            ) : !q ? (
+              <div className="p-4 text-center text-sm text-text-secondary">Ketik nama pengguna untuk mencari.</div>
             ) : results.length === 0 ? (
               <div className="p-4 text-center text-sm text-text-secondary">Tidak ada pengguna ditemukan.</div>
             ) : (
@@ -97,7 +103,7 @@ export function AssignChurchAdminModal({ churchId, onClose }: { churchId: string
                     {u.current_role && (
                       <span className="block text-xs text-text-secondary">
                         {u.current_role}
-                        {u.current_church_id ? ' · sudah di sebuah gereja' : ''}
+                        {u.current_church_id ? ' · sudah anggota gereja ini' : ''}
                       </span>
                     )}
                   </span>
@@ -106,11 +112,6 @@ export function AssignChurchAdminModal({ churchId, onClose }: { churchId: string
             )}
           </div>
 
-          {otherChurch && (
-            <p className="mt-3 rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
-              Pengguna ini sudah terdaftar di gereja lain — penetapan akan ditolak (1 pengguna 1 gereja).
-            </p>
-          )}
           {error && <p className="mt-3 text-sm text-danger">{error}</p>}
         </div>
 

@@ -58,20 +58,26 @@ export async function createChurchAction(input: CreateChurchInput): Promise<Acti
   return { ok: true };
 }
 
-// Feature B (search) — find existing registered app users by name.
-// Empty query returns the first 10 alphabetically so the picker is never blank.
-export async function searchAppUsersAction(query: string): Promise<AppUserResult[]> {
+// Feature B (search) — find assignable admin candidates by name.
+// Empty query returns nothing; the modal shows a prompt instead of a list.
+// Users already registered to a different church are dropped: the
+// enforce_single_tenant_per_user trigger would reject them on submit, so
+// offering them is a dead-end click.
+export async function searchAppUsersAction(query: string, churchId: string): Promise<AppUserResult[]> {
   await requireInternalAdmin();
   const q = query.trim();
+  if (!q || !churchId) return [];
 
   const admin = createAdminClient();
-  let profilesQuery = admin
+  // Over-fetch: the church filter runs below in TS (roles live in a second
+  // table), so the cut to 10 has to happen after it or the list comes back
+  // short whenever the name matches users of other churches.
+  const { data: profiles, error } = await admin
     .from('profiles')
     .select('id, full_name, avatar_url')
+    .ilike('full_name', `%${escapeLike(q)}%`)
     .order('full_name', { ascending: true })
-    .limit(10);
-  if (q) profilesQuery = profilesQuery.ilike('full_name', `%${escapeLike(q)}%`);
-  const { data: profiles, error } = await profilesQuery;
+    .limit(50);
   if (error) throw new Error(error.message);
 
   const ids = (profiles ?? []).map((p) => p.id);
@@ -87,14 +93,22 @@ export async function searchAppUsersAction(query: string): Promise<AppUserResult
     }
   }
 
-  return (profiles ?? []).map((p) => ({
-    id: p.id,
-    full_name: p.full_name,
-    email: null,
-    avatar_url: p.avatar_url,
-    current_church_id: rolesByUser.get(p.id)?.church_id ?? null,
-    current_role: rolesByUser.get(p.id)?.role ?? null,
-  }));
+  return (profiles ?? [])
+    // Any one non-superadmin row is enough to decide: the single-tenant trigger
+    // guarantees they all carry the same church_id.
+    .filter((p) => {
+      const current = rolesByUser.get(p.id)?.church_id ?? null;
+      return current === null || current === churchId;
+    })
+    .slice(0, 10)
+    .map((p) => ({
+      id: p.id,
+      full_name: p.full_name,
+      email: null,
+      avatar_url: p.avatar_url,
+      current_church_id: rolesByUser.get(p.id)?.church_id ?? null,
+      current_role: rolesByUser.get(p.id)?.role ?? null,
+    }));
 }
 
 // Feature B (assign) — make a registered user the church_admin of a church.
