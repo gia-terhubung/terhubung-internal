@@ -186,6 +186,121 @@ export async function assignChurchAdminAction(input: {
   return { ok: true };
 }
 
+// A church with no church_admin cannot grant roles to itself again — the
+// user_roles RLS policies let `staff` touch only member/sympathizers rows — so
+// it would need Terhubung staff to recover. Both removal actions below refuse
+// the last admin. This is an app-layer check only; there is no DB guard yet.
+async function refuseIfLastAdmin(
+  admin: ReturnType<typeof createAdminClient>,
+  churchId: string
+): Promise<string | null> {
+  const { count, error } = await admin
+    .from('user_roles')
+    .select('user_id', { count: 'exact', head: true })
+    .eq('church_id', churchId)
+    .eq('role', 'church_admin');
+
+  if (error) return error.message;
+  if ((count ?? 0) <= 1) {
+    return 'Tidak dapat menghapus admin terakhir. Tetapkan admin lain terlebih dahulu.';
+  }
+  return null;
+}
+
+// Feature B (revoke) — drop the church_admin role but keep the user in the
+// church as a plain member. The exact inverse of the assign upsert above.
+export async function revokeChurchAdminAction(input: {
+  userId: string;
+  churchId: string;
+}): Promise<ActionResult> {
+  await requireInternalAdmin();
+  if (!input.userId || !input.churchId) return { ok: false, error: 'Data tidak lengkap.' };
+
+  const admin = createAdminClient();
+
+  const lastAdmin = await refuseIfLastAdmin(admin, input.churchId);
+  if (lastAdmin) return { ok: false, error: lastAdmin };
+
+  // Same reasoning as the assign path: the elevated role sits on top of a member
+  // row, and dropping church_admin without one would orphan the user from the
+  // church. A DB trigger keeps the member row in place, but state it explicitly.
+  const { error: memberError } = await admin
+    .from('user_roles')
+    .upsert([{ user_id: input.userId, church_id: input.churchId, role: 'member' }], {
+      onConflict: 'user_id, church_id, role',
+    });
+  if (memberError) return { ok: false, error: memberError.message };
+
+  const { error } = await admin
+    .from('user_roles')
+    .delete()
+    .match({ user_id: input.userId, church_id: input.churchId, role: 'church_admin' });
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/churches/${input.churchId}`);
+  return { ok: true };
+}
+
+// Feature B (remove) — sever the user from the church entirely, by driving the
+// normal leave flow rather than deleting user_roles by hand. approve_leave_request
+// also clears family membership, ministries and future roster duties, and notifies
+// the user; the leave_requests row is the only audit trail this app has.
+export async function removeChurchAdminFromChurchAction(input: {
+  userId: string;
+  churchId: string;
+}): Promise<ActionResult> {
+  const { user } = await requireInternalAdmin();
+  if (!input.userId || !input.churchId) return { ok: false, error: 'Data tidak lengkap.' };
+
+  const admin = createAdminClient();
+
+  const lastAdmin = await refuseIfLastAdmin(admin, input.churchId);
+  if (lastAdmin) return { ok: false, error: lastAdmin };
+
+  // idx_leave_requests_user_pending allows one pending row per user, so reuse an
+  // existing request (the user may have filed one themselves) instead of failing.
+  const { data: existing, error: existingError } = await admin
+    .from('leave_requests')
+    .select('id')
+    .eq('user_id', input.userId)
+    .eq('church_id', input.churchId)
+    .eq('status', 'pending')
+    .maybeSingle();
+
+  if (existingError) return { ok: false, error: existingError.message };
+
+  let requestId = existing?.id as string | undefined;
+
+  if (!requestId) {
+    const { data: created, error: insertError } = await admin
+      .from('leave_requests')
+      .insert({
+        user_id: input.userId,
+        church_id: input.churchId,
+        reason: `Dikeluarkan oleh staf Terhubung (${user.email}).`,
+      })
+      .select('id')
+      .single();
+
+    if (insertError) return { ok: false, error: insertError.message };
+    requestId = created.id as string;
+  }
+
+  // service_role is granted this RPC and bypasses its church-admin check.
+  const { data, error } = await admin.rpc('approve_leave_request', {
+    request_id: requestId,
+    reviewed_by_id: user.id,
+  });
+
+  if (error) return { ok: false, error: error.message };
+  // The RPC reports business failures as { success: false } with HTTP 200.
+  if (!data?.success) return { ok: false, error: data?.error || 'Gagal mengeluarkan pengguna.' };
+
+  revalidatePath(`/churches/${input.churchId}`);
+  return { ok: true };
+}
+
 // Feature A (edit) — upsert the church + billing contact. Works whether or not a
 // contact row exists yet (e.g. backfilling a church created before this feature).
 export async function updateChurchContactAction(input: {

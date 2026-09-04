@@ -17,6 +17,10 @@ import {
   scheduleDowngradeToFreeAction,
   resetPendingChangeAction,
 } from '@/services/billing.actions';
+import {
+  revokeChurchAdminAction,
+  removeChurchAdminFromChurchAction,
+} from '@/services/church.actions';
 import type { ChurchAdminRow, ChurchContact, ChurchDetail } from '@/services/church.service';
 import type {
   BillingStatus,
@@ -87,6 +91,10 @@ export function ChurchDetailClient({
   const [showRenew, setShowRenew] = useState(false);
   const [subConfirm, setSubConfirm] = useState<'cancel-on' | 'cancel-off' | 'downgrade' | 'reset' | null>(null);
   const [subError, setSubError] = useState<string | null>(null);
+  const [adminConfirm, setAdminConfirm] = useState<
+    { kind: 'revoke' | 'remove'; admin: ChurchAdminRow } | null
+  >(null);
+  const [adminError, setAdminError] = useState<string | null>(null);
 
   const isPaid =
     subscription != null &&
@@ -106,6 +114,20 @@ export function ChurchDetailClient({
       return;
     }
     setSubConfirm(null);
+    router.refresh();
+  }
+
+  async function runAdminAction(kind: 'revoke' | 'remove', userId: string) {
+    setAdminError(null);
+    const res =
+      kind === 'revoke'
+        ? await revokeChurchAdminAction({ userId, churchId: church.id })
+        : await removeChurchAdminFromChurchAction({ userId, churchId: church.id });
+    if (!res.ok) {
+      setAdminError(res.error);
+      return;
+    }
+    setAdminConfirm(null);
     router.refresh();
   }
 
@@ -363,13 +385,39 @@ export function ChurchDetailClient({
             + Tetapkan Admin
           </button>
         </div>
+        {adminError && <p className="px-4 pt-4 text-sm text-danger">{adminError}</p>}
         {admins.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-text-secondary">Belum ada admin gereja.</div>
         ) : (
           admins.map((a) => (
-            <div key={a.user_id} className="flex items-center gap-3 border-b border-border-color p-4 last:border-b-0">
-              <Avatar src={a.avatar_url} initials={a.full_name} size="sm" />
-              <span className="text-sm font-medium text-text-primary">{a.full_name}</span>
+            <div
+              key={a.user_id}
+              className="flex items-center justify-between gap-3 border-b border-border-color p-4 last:border-b-0"
+            >
+              <div className="flex items-center gap-3">
+                <Avatar src={a.avatar_url} initials={a.full_name} size="sm" />
+                <span className="text-sm font-medium text-text-primary">{a.full_name}</span>
+              </div>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => {
+                    setAdminError(null);
+                    setAdminConfirm({ kind: 'revoke', admin: a });
+                  }}
+                  className="text-xs text-text-secondary hover:text-text-primary"
+                >
+                  Cabut Admin
+                </button>
+                <button
+                  onClick={() => {
+                    setAdminError(null);
+                    setAdminConfirm({ kind: 'remove', admin: a });
+                  }}
+                  className="text-xs text-danger hover:underline"
+                >
+                  Keluarkan dari Gereja
+                </button>
+              </div>
             </div>
           ))
         )}
@@ -462,6 +510,29 @@ export function ChurchDetailClient({
           danger={subConfirm === 'cancel-on' || subConfirm === 'downgrade'}
           onConfirm={() => runSubAction(subConfirm)}
           onClose={() => setSubConfirm(null)}
+        />
+      )}
+      {adminConfirm && (
+        <ConfirmDialog
+          title={adminConfirm.kind === 'revoke' ? 'Cabut Admin' : 'Keluarkan dari Gereja'}
+          message={
+            adminConfirm.kind === 'revoke' ? (
+              <>
+                Cabut akses admin {adminConfirm.admin.full_name} di {church.name}? Yang
+                bersangkutan tetap menjadi jemaat gereja ini, hanya kehilangan akses admin.
+              </>
+            ) : (
+              <>
+                Keluarkan {adminConfirm.admin.full_name} dari {church.name}? Seluruh keanggotaan
+                (keluarga, tim pelayanan, jadwal mendatang, dan semua peran) diputus dan yang
+                bersangkutan akan diberi notifikasi. Tindakan ini tidak dapat dibatalkan.
+              </>
+            )
+          }
+          confirmLabel={adminConfirm.kind === 'revoke' ? 'Cabut' : 'Keluarkan'}
+          danger
+          onConfirm={() => runAdminAction(adminConfirm.kind, adminConfirm.admin.user_id)}
+          onClose={() => setAdminConfirm(null)}
         />
       )}
       {showChangeSub && subscription && (
