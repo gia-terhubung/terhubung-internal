@@ -11,9 +11,19 @@ export function ChurchMultiSelect({ campaignId, initial }: { campaignId: string;
   const [selected, setSelected] = useState<ChurchOption[]>(initial);
   const [results, setResults] = useState<ChurchOption[]>([]);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [touched, setTouched] = useState(false);
   const [saved, setSaved] = useState(false);
   const reqId = useRef(0);
+
+  const initialKey = initial.map((i) => i.id).sort().join(',');
+  // Pick up server changes (e.g. after refresh) unless the user has edits in progress.
+  const [seenKey, setSeenKey] = useState(initialKey);
+  if (seenKey !== initialKey) {
+    setSeenKey(initialKey);
+    if (!touched) setSelected(initial);
+  }
 
   const dirty =
     selected.length !== initial.length || selected.some((s) => !initial.find((i) => i.id === s.id));
@@ -24,21 +34,27 @@ export function ChurchMultiSelect({ campaignId, initial }: { campaignId: string;
       const r = q.trim() ? await searchChurchesAction(q) : [];
       if (my !== reqId.current) return;
       setResults(r);
-      setError(null);
+      setSearchError(null);
     } catch (e) {
       if (my !== reqId.current) return;
-      setError(e instanceof Error ? e.message : 'Pencarian gagal.');
+      setSearchError(e instanceof Error ? e.message : 'Pencarian gagal.');
     }
   }
 
   async function save() {
     setSaving(true);
-    setError(null);
-    const res = await setCampaignChurchesAction(campaignId, selected.map((s) => s.id));
-    setSaving(false);
-    if (!res.ok) return setError(res.error);
-    setSaved(true);
-    router.refresh();
+    setSaveError(null);
+    try {
+      const res = await setCampaignChurchesAction(campaignId, selected.map((s) => s.id), initial.map((i) => i.id));
+      if (!res.ok) return setSaveError(res.error);
+      setTouched(false);
+      setSaved(true);
+      router.refresh();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Gagal menyimpan gereja peserta.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -55,7 +71,7 @@ export function ChurchMultiSelect({ campaignId, initial }: { campaignId: string;
             {c.name}
             <button
               aria-label={`Hapus ${c.name}`}
-              onClick={() => { setSaved(false); setSelected((s) => s.filter((x) => x.id !== c.id)); }}
+              onClick={() => { setSaved(false); setTouched(true); setSelected((s) => s.filter((x) => x.id !== c.id)); }}
               className="text-text-secondary hover:text-danger"
             >
               &times;
@@ -74,7 +90,7 @@ export function ChurchMultiSelect({ campaignId, initial }: { campaignId: string;
                 <li key={r.id}>
                   <button
                     disabled={picked}
-                    onClick={() => { setSaved(false); setError(null); setSelected((s) => [...s, r]); }}
+                    onClick={() => { setSaved(false); setTouched(true); setSearchError(null); setSelected((s) => [...s, r]); }}
                     className="flex w-full justify-between px-3 py-2 text-left text-sm text-text-primary hover:bg-bg-hover disabled:opacity-50"
                   >
                     <span>{r.name}</span>
@@ -88,7 +104,8 @@ export function ChurchMultiSelect({ campaignId, initial }: { campaignId: string;
       </div>
 
       <div className="mt-4 flex items-center justify-end gap-3">
-        {error && <p className="text-sm text-danger">{error}</p>}
+        {searchError && <p className="text-sm text-danger">{searchError}</p>}
+        {saveError && <p className="text-sm text-danger">{saveError}</p>}
         {saved && !dirty && <p className="text-sm text-text-secondary">Gereja peserta disimpan.</p>}
         <button
           onClick={save}

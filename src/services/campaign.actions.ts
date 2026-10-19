@@ -293,15 +293,32 @@ export async function searchChurchesAction(query: string): Promise<ChurchOption[
 
 // Replace the participating set. Removing a church mid-campaign is allowed
 // (its members drop out of leaderboards; their ledger rows stay).
-export async function setCampaignChurchesAction(id: string, churchIds: string[]): Promise<ActionResult> {
+export async function setCampaignChurchesAction(
+  id: string,
+  churchIds: string[],
+  expectedChurchIds: string[]
+): Promise<ActionResult> {
   await requireInternalAdmin();
-  if (!Array.isArray(churchIds) || !churchIds.every((c) => typeof c === 'string' && isUuid(c))) {
+  try {
+    return await setCampaignChurches(id, churchIds, expectedChurchIds);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Gagal menyimpan gereja peserta.' };
+  }
+}
+
+async function setCampaignChurches(id: string, churchIds: string[], expectedChurchIds: string[]): Promise<ActionResult> {
+  const validIds = (a: unknown) => Array.isArray(a) && a.every((c) => typeof c === 'string' && isUuid(c));
+  if (!validIds(churchIds) || !validIds(expectedChurchIds)) {
     return { ok: false, error: 'Daftar gereja tidak valid.' };
   }
   const cur = await loadCampaign(id);
   if (!cur) return { ok: false, error: 'Campaign tidak ditemukan.' };
   const next = [...new Set(churchIds)];
   const existing = await churchIdsOf(id);
+  const expected = new Set(expectedChurchIds);
+  if (existing.length !== expected.size || existing.some((c) => !expected.has(c))) {
+    return { ok: false, error: 'Daftar gereja sudah berubah. Muat ulang halaman lalu coba lagi.' };
+  }
   const toRemove = existing.filter((c) => !next.includes(c));
   const toAdd = next.filter((c) => !existing.includes(c));
   if (cur.status === 'published') {
