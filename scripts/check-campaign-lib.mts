@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import {
   DEFAULT_MODULES, DEFAULT_RULES, DEFAULT_THEME, DEFAULT_VENUE,
-  campaignDays, computeStatus, isoToWibInput, parseCsv, parseQuestionCsv, requiredCount,
+  campaignDays, computeStatus, isoToWibInput, parseCsv, parseQuestionCsv, rpcErrorMessage,
   countableWeeks, lastDay, resolveRequirements, toCsv, totalDays, validateCampaignInput, weekNo, weekRange, wibDate,
   wibInputToIso,
 } from '../src/libs/campaign.ts';
@@ -29,13 +29,9 @@ assert.deepEqual(countableWeeks(start, '2026-12-28T00:00:00+07:00', [1, 9, 10]),
 assert.deepEqual(countableWeeks(start, '2026-12-28T00:00:01+07:00', [1, 9, 10]), [1, 9, 10]);
 assert.deepEqual(weekRange(start, 2), { from: '2026-11-02', to: '2026-11-08' });
 assert.equal(campaignDays(start, '2026-11-03T10:00:00+07:00').join(','), '2026-11-01,2026-11-02,2026-11-03');
-// L4 percentage requirements (same as SQL P14)
-assert.equal(requiredCount(65, 61), 40);
-assert.equal(requiredCount(65, 9), 6);
-assert.equal(requiredCount(65, 0), 0);
-const req = resolveRequirements(DEFAULT_RULES, start, '2026-12-31T18:00:00+07:00', [2, 3, 4, 5, 6, 7, 8, 9, 10]);
-assert.equal(req.checkins, 40);
-assert.equal(req.weekly, 6);
+// L4 settings preview: period facts only (top-N model, no % thresholds)
+const req = resolveRequirements(start, '2026-12-31T18:00:00+07:00', [2, 3, 4, 5, 6, 7, 8, 9, 10]);
+assert.deepEqual(req, { days: 61, lastDay: '2026-12-31', weeksInRange: 10, weeksAssigned: 9 });
 // L5 CSV: BOM, CRLF, quoted comma + escaped quote, trailing blank line
 const rows = parseCsv('﻿a,b\r\n"x, y","say ""hi"""\r\n\r\n');
 assert.deepEqual(rows, [['a', 'b'], ['x, y', 'say "hi"']]);
@@ -69,6 +65,10 @@ const input = { name: 'Natal', start_at: start, close_at: base.close_at, draw_at
   theme: DEFAULT_THEME, venue: DEFAULT_VENUE, modules: DEFAULT_MODULES, rules: DEFAULT_RULES };
 assert.equal(validateCampaignInput(input), null);
 assert.match(validateCampaignInput({ ...input, draw_at: '2026-12-31T17:00:00+07:00' }) ?? '', /undian/);
-assert.match(validateCampaignInput({ ...input, rules: { ...DEFAULT_RULES, grand_checkin_pct: 120 } }) ?? '', /0–100/);
+assert.match(validateCampaignInput({ ...input, rules: { ...DEFAULT_RULES, grand_top_n: 0 } }) ?? '', /1–500/);
+// L10 top-N model: default N = 10, threshold keys gone, prize_not_drawable has copy
+assert.equal(DEFAULT_RULES.grand_top_n, 10);
+assert.ok(!('grand_checkin_pct' in DEFAULT_RULES));
+assert.match(rpcErrorMessage('prize_not_drawable'), /tidak diundi/);
 
 console.log('check-campaign-lib: all assertions passed');

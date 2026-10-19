@@ -15,11 +15,7 @@ export interface CampaignRules {
   daily_timer_sec: number;
   weekly_timer_sec: number;
   timer_grace_sec: number;
-  grand_top_n: number;
-  grand_checkin_pct: number;
-  grand_weekly_pct: number;
-  grand_min_prayers: number;
-  grand_min_comments: number;
+  grand_top_n: number; // top N overall (all churches): fixed prize; the grand prize is drawn from them
 }
 
 export interface CampaignTheme {
@@ -111,7 +107,9 @@ export interface CampaignInput {
   rules: CampaignRules;
 }
 
-export type PrizeType = 'grand' | 'normal';
+// 'top' = fixed prize for the top N overall: listed only, never drawn (draw_next raises prize_not_drawable).
+// Winners and draw_pool rows are only ever 'grand' | 'normal'.
+export type PrizeType = 'grand' | 'normal' | 'top';
 
 export interface PrizeRow {
   id: string;
@@ -184,6 +182,7 @@ export interface ParticipantRow {
   full_name: string;
   church_name: string | null;
   points: number;
+  overall_rank: number; // rank across all participating churches (decides the top N)
   church_rank: number;
   checkins: number;
   weekly_done: number;
@@ -199,6 +198,20 @@ export interface MonitorData {
   participants: ParticipantRow[];
   total: number;
   page: number;
+  top: AdminTopRow[]; // campaign.admin_top: frozen list after freeze, live preview before
+}
+
+// One row of campaign.admin_top(p_campaign). Before freeze the list is live (frozen = false);
+// after freeze it is the draw_pool grand rows (frozen = true). phone is NULL for dummies.
+export interface AdminTopRow {
+  rank: number;
+  user_id: string;
+  full_name: string;
+  display_name: string;
+  church_name: string;
+  points: number;
+  phone: string | null;
+  frozen: boolean;
 }
 
 export interface PointEventRow {
@@ -220,6 +233,7 @@ export interface AdminWinnerRow {
   display_name: string;
   church_name: string;
   phone: string | null;
+  has_app: boolean; // false = non-app member (people row, no account): normal prizes only, no push — reach them by phone
   drawn_at: string;
 }
 

@@ -9,7 +9,8 @@ import type {
   CampaignVenue, QuestionCategory, QuestionDraft,
 } from '../types/campaign.types';
 
-// ---------- defaults (identical to the column defaults in plan 1) ----------
+// ---------- defaults (column defaults in plan 1, except: grand_top_n = 10 and the
+// threshold keys dropped by the top-N model, plan 1B) ----------
 
 export const DEFAULT_RULES: CampaignRules = {
   daily_checkin_points: 5, daily_correct_bonus: 5,
@@ -18,8 +19,7 @@ export const DEFAULT_RULES: CampaignRules = {
   prayer_points: 5, prayer_daily_cap: 1,
   comment_points: 2, comment_daily_cap: 3, comment_min_chars: 10,
   daily_timer_sec: 15, weekly_timer_sec: 20, timer_grace_sec: 3,
-  grand_top_n: 20, grand_checkin_pct: 65, grand_weekly_pct: 65,
-  grand_min_prayers: 1, grand_min_comments: 5,
+  grand_top_n: 10,
 };
 
 export const DEFAULT_THEME: CampaignTheme = {
@@ -63,11 +63,7 @@ export const RULE_FIELDS: RuleField[] = [
   { key: 'daily_timer_sec', label: 'Waktu soal harian', group: 'timers', min: 5, max: 120, suffix: 'detik' },
   { key: 'weekly_timer_sec', label: 'Waktu per soal mingguan', group: 'timers', min: 5, max: 120, suffix: 'detik' },
   { key: 'timer_grace_sec', label: 'Toleransi jaringan', group: 'timers', min: 0, max: 10, suffix: 'detik' },
-  { key: 'grand_top_n', label: 'Peringkat teratas per gereja', group: 'grand', min: 1, max: 500 },
-  { key: 'grand_checkin_pct', label: 'Minimal hari check-in', group: 'grand', min: 0, max: 100, suffix: '%' },
-  { key: 'grand_weekly_pct', label: 'Minimal kuis mingguan selesai', group: 'grand', min: 0, max: 100, suffix: '%' },
-  { key: 'grand_min_prayers', label: 'Minimal doa', group: 'grand', min: 0, max: 100 },
-  { key: 'grand_min_comments', label: 'Minimal komentar', group: 'grand', min: 0, max: 500 },
+  { key: 'grand_top_n', label: 'Jumlah peringkat teratas (semua gereja) — dapat hadiah tetap', group: 'grand', min: 1, max: 500 },
 ];
 
 export const STATUS_LABEL: Record<CampaignStatus, string> = {
@@ -152,26 +148,17 @@ export function countableWeeks(startIso: string, closeIso: string, assignedWeeks
   return [...new Set(assignedWeeks)].filter((w) => w >= 1 && weekRange(startIso, w).from <= last).sort((a, b) => a - b);
 }
 
-/** ceil(pct × total / 100) with integer inputs — same as SQL ceil(numeric). */
-export function requiredCount(pct: number, total: number): number {
-  return Math.ceil((pct * total) / 100);
-}
-
+/** Period facts for the settings preview. The top-N model has no activity thresholds. */
 export function resolveRequirements(
-  rules: CampaignRules,
   startIso: string,
   closeIso: string,
   assignedWeeks: number[]
-): { days: number; lastDay: string; weeksInRange: number; weeksAssigned: number; checkins: number; weekly: number } {
-  const days = totalDays(startIso, closeIso);
-  const weeksAssigned = countableWeeks(startIso, closeIso, assignedWeeks).length;
+): { days: number; lastDay: string; weeksInRange: number; weeksAssigned: number } {
   return {
-    days,
+    days: totalDays(startIso, closeIso),
     lastDay: lastDay(closeIso),
     weeksInRange: weekNo(startIso, lastDay(closeIso)),
-    weeksAssigned,
-    checkins: requiredCount(rules.grand_checkin_pct, days),
-    weekly: requiredCount(rules.grand_weekly_pct, weeksAssigned),
+    weeksAssigned: countableWeeks(startIso, closeIso, assignedWeeks).length,
   };
 }
 
@@ -409,6 +396,7 @@ const RPC_ERRORS: Record<string, string> = {
   no_church: 'Tambahkan gereja peserta dulu.',
   note_required: 'Catatan wajib diisi.',
   already_drawn: 'Pengundian sudah dimulai.',
+  prize_not_drawable: 'Hadiah tetap tidak diundi. Hadiah ini langsung untuk peringkat teratas.',
   // Plan 1 edit-block triggers (the app also pre-checks for UX).
   question_in_use: 'Pertanyaan sudah dijawab peserta, tidak bisa diubah. Arsipkan dan buat yang baru.',
   slot_locked: 'Jadwal ini sudah dijawab peserta, tidak bisa diganti.',
