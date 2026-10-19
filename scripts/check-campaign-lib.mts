@@ -6,7 +6,7 @@ import {
   DEFAULT_MODULES, DEFAULT_RULES, DEFAULT_THEME, DEFAULT_VENUE,
   campaignDays, computeStatus, isoToWibInput, parseCsv, parseQuestionCsv, rpcErrorMessage,
   countableWeeks, lastDay, resolveRequirements, toCsv, totalDays, validateCampaignInput, weekNo, weekRange, wibDate,
-  wibInputToIso, isUuid, campaignAssetPrefix, sanitizeAssetUrl, sanitizeCampaignInput,
+  wibInputToIso, isUuid, campaignAssetPrefix, sanitizeAssetUrl, sanitizeCampaignInput, slotOutOfPeriod,
 } from '../src/libs/campaign.ts';
 
 // L1 WIB day: 2026-11-01 17:30 UTC = 2026-11-02 00:30 WIB
@@ -128,3 +128,13 @@ assert.match(parseQuestionCsv('prompt,option_a\n').errors[0], /Header harus pers
 assert.match(parseQuestionCsv('prompt,option_a,option_b,correct,category,difficulty\n"abc,d,e,a,umum,1\n').errors[0], /Tanda kutip tidak ditutup/);
 
 console.log('check-campaign-lib: all assertions passed');
+
+// T7 out-of-period slots: close 26 Dec 00:00 WIB -> last day 25 Dec; start Mon 16 Nov (week 6 = 21-27 Dec, Monday 21 Dec <= 25 Dec; week 7 Monday 28 Dec)
+{
+  const s7 = '2026-11-16T00:00:00+07:00';
+  const c7 = '2026-12-26T00:00:00+07:00';
+  assert.equal(slotOutOfPeriod(s7, c7, { kind: 'daily', for_date: '2026-12-25', week_no: null }), false);
+  assert.equal(slotOutOfPeriod(s7, c7, { kind: 'daily', for_date: '2026-12-26', week_no: null }), true);
+  assert.equal(slotOutOfPeriod(s7, c7, { kind: 'weekly', for_date: null, week_no: 6 }), false);
+  assert.equal(slotOutOfPeriod(s7, c7, { kind: 'weekly', for_date: null, week_no: 7 }), true);
+}

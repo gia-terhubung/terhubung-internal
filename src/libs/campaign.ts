@@ -142,6 +142,17 @@ export function campaignDays(startIso: string, closeIso: string): string[] {
   return Array.from({ length: Math.max(0, n) }, (_, i) => addDays(first, i));
 }
 
+/** True for a slot the DB does not count: daily after last_day, weekly whose Monday is after last_day. */
+export function slotOutOfPeriod(
+  startIso: string,
+  closeIso: string,
+  s: { kind: 'daily' | 'weekly'; for_date: string | null; week_no: number | null },
+): boolean {
+  const last = lastDay(closeIso);
+  if (s.kind === 'daily') return (s.for_date ?? '') > last;
+  return s.week_no !== null && weekRange(startIso, s.week_no).from > last;
+}
+
 /** Mirrors campaign.total_weeks: weeks that have slots AND whose Monday ≤ last_day. */
 export function countableWeeks(startIso: string, closeIso: string, assignedWeeks: number[]): number[] {
   const last = lastDay(closeIso);

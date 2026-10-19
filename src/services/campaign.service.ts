@@ -5,7 +5,7 @@ import { createAdminClient } from '@/libs/supabase/admin';
 import { computeStatus, defaultCampaignInput, isUuid } from '@/libs/campaign';
 import { clampPage, escapeLike, pageRange, type Paged } from '@/libs/pagination';
 import type {
-  CampaignDetail, CampaignInput, CampaignListItem, CampaignRow, ChurchOption, PrizeRow, QuestionCategory, QuestionRow,
+  CampaignDetail, CampaignInput, CampaignListItem, CampaignRow, ChurchOption, PrizeRow, QuestionCategory, QuestionRow, SlotRow,
 } from '@/types/campaign.types';
 
 export const CAMPAIGN_COLS =
@@ -169,4 +169,38 @@ export async function listQuestionsPage(params: {
   }
 
   return { rows: rows.map((r) => ({ ...r, used_in: usage.get(r.id) ?? [] })), total, page };
+}
+
+// Slots that already have attempts come from one plan 1 RPC (campaign.locked_slots).
+export async function getSchedule(campaignId: string): Promise<SlotRow[]> {
+  await requireInternalAdmin();
+  if (!isUuid(campaignId)) return [];
+  const db = campaignDb();
+  const [sRes, lRes] = await Promise.all([
+    db.from('question_slots')
+      .select('id, kind, for_date, week_no, position, question_id, questions(prompt, category)')
+      .eq('campaign_id', campaignId),
+    db.rpc('locked_slots', { p_campaign: campaignId }),
+  ]);
+  if (sRes.error) throw new Error(sRes.error.message);
+  if (lRes.error) throw new Error(lRes.error.message);
+
+  const rows = (sRes.data ?? []) as unknown as {
+    id: string; kind: 'daily' | 'weekly'; for_date: string | null; week_no: number | null; position: number;
+    question_id: string; questions: { prompt: string; category: SlotRow['category'] } | null;
+  }[];
+
+  const locked = new Set(((lRes.data ?? []) as { slot_id: string }[]).map((r) => r.slot_id));
+
+  return rows.map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    for_date: r.for_date,
+    week_no: r.week_no,
+    position: r.position,
+    question_id: r.question_id,
+    prompt: r.questions?.prompt ?? '-',
+    category: r.questions?.category ?? 'umum',
+    locked: locked.has(r.id),
+  }));
 }
