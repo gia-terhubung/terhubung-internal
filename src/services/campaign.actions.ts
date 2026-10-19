@@ -5,7 +5,8 @@ import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
 import { DEFAULT_RULES, addDays, campaignAssetPrefix, diffDays, isUuid, sanitizeCampaignInput, validateCampaignInput, wibDate } from '@/libs/campaign';
 import type { ActionResult } from '@/types/internal.types';
-import type { ActionResultWith, CampaignInput, CampaignRow } from '@/types/campaign.types';
+import { orIlike } from '@/libs/pagination';
+import type { ActionResultWith, CampaignInput, CampaignRow, ChurchOption } from '@/types/campaign.types';
 
 const COLS =
   'id, name, status, is_test, sim_now, start_at, close_at, draw_at, frozen_at, theme, venue, modules, rules, created_at, updated_at';
@@ -64,10 +65,11 @@ async function overlapError(campaignId: string, churchIds: string[], startIso: s
   const rows = (shared ?? []) as { campaign_id: string; church_id: string }[];
   if (rows.length === 0) return null;
 
-  const { data: churches } = await createAdminClient()
+  const { data: churches, error: cErr } = await createAdminClient()
     .from('churches')
     .select('id, name')
     .in('id', [...new Set(rows.map((r) => r.church_id))]);
+  if (cErr) throw new Error(cErr.message);
   const churchName = new Map(((churches ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
   const campaignName = new Map(overlapping.map((o) => [o.id, o.name]));
   const list = rows
@@ -273,4 +275,53 @@ export async function uploadCampaignImageAction(formData: FormData): Promise<Act
   const { error } = await storage.upload(path, file, { contentType: file.type, upsert: false });
   if (error) return { ok: false, error: error.message };
   return { ok: true, data: { url: storage.getPublicUrl(path).data.publicUrl } };
+}
+
+export async function searchChurchesAction(query: string): Promise<ChurchOption[]> {
+  await requireInternalAdmin();
+  const q = query.trim();
+  if (!q) return [];
+  const { data, error } = await createAdminClient()
+    .from('churches')
+    .select('id, name, city')
+    .or(orIlike(['name', 'city'], q))
+    .order('name')
+    .limit(10);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ChurchOption[];
+}
+
+// Replace the participating set. Removing a church mid-campaign is allowed
+// (its members drop out of leaderboards; their ledger rows stay).
+export async function setCampaignChurchesAction(id: string, churchIds: string[]): Promise<ActionResult> {
+  await requireInternalAdmin();
+  if (!Array.isArray(churchIds) || !churchIds.every((c) => typeof c === 'string' && isUuid(c))) {
+    return { ok: false, error: 'Daftar gereja tidak valid.' };
+  }
+  const cur = await loadCampaign(id);
+  if (!cur) return { ok: false, error: 'Campaign tidak ditemukan.' };
+  const next = [...new Set(churchIds)];
+  const existing = await churchIdsOf(id);
+  const toRemove = existing.filter((c) => !next.includes(c));
+  const toAdd = next.filter((c) => !existing.includes(c));
+  if (cur.status === 'published') {
+    if (next.length === 0) return { ok: false, error: 'Campaign yang dipublikasikan harus punya minimal satu gereja.' };
+    // Only newly added churches can introduce a clash.
+    const overlap = await overlapError(id, toAdd, cur.start_at, cur.draw_at);
+    if (overlap) return { ok: false, error: overlap };
+  }
+
+  const db = campaignDb();
+  if (toRemove.length > 0) {
+    const { error } = await db.from('campaign_churches').delete().eq('campaign_id', id).in('church_id', toRemove);
+    if (error) return { ok: false, error: error.message };
+  }
+  if (toAdd.length > 0) {
+    const { error } = await db.from('campaign_churches').insert(toAdd.map((c) => ({ campaign_id: id, church_id: c })));
+    if (error) return { ok: false, error: error.message };
+  }
+
+  revalidatePath('/campaigns');
+  revalidatePath('/campaigns/[id]', 'layout');
+  return { ok: true };
 }

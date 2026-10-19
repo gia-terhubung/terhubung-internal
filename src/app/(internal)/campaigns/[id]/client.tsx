@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ConfirmDialog } from '@/components/molecules/ConfirmDialog.molecule';
 import { CampaignSettingsForm } from '@/components/organisms/CampaignSettingsForm.organism';
+import { ChurchMultiSelect } from '@/components/organisms/ChurchMultiSelect.organism';
 import { DuplicateCampaignModal } from '@/components/organisms/DuplicateCampaignModal.organism';
 import { setCampaignStatusAction } from '@/services/campaign.actions';
 import { toCampaignInput } from '@/libs/campaign';
@@ -73,6 +74,8 @@ export function CampaignSettingsClient({ detail }: { detail: CampaignDetail }) {
         assignedWeeks={detail.weekly_weeks}
         dailyDates={detail.daily_dates}
       />
+
+      <ChurchMultiSelect key={detail.churches.map((x) => x.id).join(',')} campaignId={c.id} initial={detail.churches} />
 
       {pending && (
         <ConfirmDialog
