@@ -40,7 +40,7 @@ export function TestToolsPanel({ campaign }: { campaign: CampaignRow }) {
       <h2 className="font-semibold text-text-primary">Alat uji coba</h2>
       <p className="mt-1 text-sm text-text-secondary">
         Hanya untuk campaign uji coba. Waktu simulasi menggeser jam campaign (hari, minggu, pengingat, pembekuan), tetapi timer soal tetap waktu nyata.
-        Peringatan: waktu simulasi juga memicu notifikasi dan pengingat sungguhan ke HP peserta di gereja uji coba.
+        Peringatan: waktu simulasi juga memicu notifikasi dan pengingat sungguhan ke HP peserta di gereja uji coba. Waktu simulasi setelah tanggal tutup akan membekukan peserta dan mengunci tanggal tutup sampai Reset.
       </p>
 
       <div className="mt-4 flex flex-wrap items-end gap-3">
@@ -64,7 +64,7 @@ export function TestToolsPanel({ campaign }: { campaign: CampaignRow }) {
       <div className="mt-4 flex flex-wrap items-end gap-3">
         <label className="block">
           <span className="text-sm text-text-secondary">Peserta dummy</span>
-          <input type="number" min={1} max={5000} value={count} onChange={(e) => setCount(e.target.value)} className={`block w-32 ${inputCls}`} />
+          <input type="number" min={1} max={2000} value={count} onChange={(e) => setCount(e.target.value)} className={`block w-32 ${inputCls}`} />
         </label>
         <button disabled={busy} className={btn}
           onClick={() => run(() => seedDummyAction(campaign.id, Number(count)), `${count} peserta dummy dibuat di gereja pertama.`)}>

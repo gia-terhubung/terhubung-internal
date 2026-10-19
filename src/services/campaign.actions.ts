@@ -441,11 +441,16 @@ export async function setSimNowAction(id: string, iso: string | null): Promise<A
     const cur = await loadCampaign(id);
     if (!cur) return { ok: false, error: 'Campaign tidak ditemukan.' };
     if (!cur.is_test) return { ok: false, error: 'Waktu simulasi hanya untuk campaign uji coba.' };
-    if (iso !== null && (typeof iso !== 'string' || Number.isNaN(Date.parse(iso)))) {
-      return { ok: false, error: 'Waktu simulasi tidak valid.' };
+    let normalized: string | null = null;
+    if (iso !== null) {
+      const d = typeof iso === 'string' ? new Date(iso) : null;
+      if (!d || Number.isNaN(d.getTime())) return { ok: false, error: 'Waktu simulasi tidak valid.' };
+      normalized = d.toISOString();
     }
-    const { error } = await campaignDb().from('campaigns').update({ sim_now: iso, updated_at: new Date().toISOString() }).eq('id', id);
-    if (error) return { ok: false, error: error.message };
+    const { error } = await campaignDb().from('campaigns').update({ sim_now: normalized, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) {
+      return { ok: false, error: error.code === '23514' ? 'Waktu simulasi hanya untuk campaign uji coba.' : error.message };
+    }
     revalidatePath('/campaigns/[id]', 'layout');
     return { ok: true };
   } catch (e) {
@@ -457,7 +462,7 @@ export async function seedDummyAction(id: string, count: number): Promise<Action
   await requireInternalAdmin();
   try {
     if (!isUuid(id)) return { ok: false, error: 'Campaign tidak ditemukan.' };
-    if (!Number.isInteger(count) || count < 1 || count > 5000) return { ok: false, error: 'Jumlah peserta dummy 1–5000.' };
+    if (!Number.isInteger(count) || count < 1 || count > 2000) return { ok: false, error: 'Jumlah peserta dummy 1–2000.' };
     const cur = await loadCampaign(id);
     if (!cur) return { ok: false, error: 'Campaign tidak ditemukan.' };
     if (!cur.is_test) return { ok: false, error: rpcErrorMessage('not_test') };

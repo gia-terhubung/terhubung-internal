@@ -479,7 +479,10 @@ export function parseQuestionCsv(text: string): { rows: QuestionDraft[]; errors:
 
 export function toCsv(rows: (string | number | null)[][]): string {
   const cell = (v: string | number | null) => {
-    const s = v === null ? '' : String(v);
+    let s = v === null ? '' : String(v);
+    // CSV formula injection guard: a string starting with = + - @ tab or CR gets a leading '.
+    // Side effect (accepted): phone numbers like +62812... keep their '+' in Excel, shown with the '.
+    if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
     return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   return rows.map((r) => r.map(cell).join(',') + '\r\n').join('');

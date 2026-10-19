@@ -36,6 +36,12 @@ assert.deepEqual(req, { days: 61, lastDay: '2026-12-31', weeksInRange: 10, weeks
 const rows = parseCsv('\uFEFFa,b\r\n"x, y","say ""hi"""\r\n\r\n');
 assert.deepEqual(rows, [['a', 'b'], ['x, y', 'say "hi"']]);
 assert.equal(toCsv([['x, y', 'say "hi"', 3, null]]), '"x, y","say ""hi""",3,\r\n');
+// CSV formula injection guard
+assert.equal(toCsv([['=HYPERLINK("http://x","y")']]), "\"'=HYPERLINK(\"\"http://x\"\",\"\"y\"\")\"\r\n");
+assert.equal(toCsv([['+628123']]), "'+628123\r\n");
+assert.equal(toCsv([['-5']]), "'-5\r\n");
+assert.equal(toCsv([['@x']]), "'@x\r\n");
+assert.equal(toCsv([[-5, 'Budi Santoso']]), '-5,Budi Santoso\r\n');
 // L6 question CSV happy path
 const ok = parseQuestionCsv(
   'prompt,option_a,option_b,correct,category,difficulty\n"Ibu kota Indonesia?",Jakarta,Bandung,a,umum,1\n'
