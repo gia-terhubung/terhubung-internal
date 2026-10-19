@@ -3,8 +3,9 @@ import { cache } from 'react';
 import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
 import { computeStatus, defaultCampaignInput, isUuid } from '@/libs/campaign';
+import { clampPage, escapeLike, pageRange, type Paged } from '@/libs/pagination';
 import type {
-  CampaignDetail, CampaignInput, CampaignListItem, CampaignRow, ChurchOption, PrizeRow,
+  CampaignDetail, CampaignInput, CampaignListItem, CampaignRow, ChurchOption, PrizeRow, QuestionCategory, QuestionRow,
 } from '@/types/campaign.types';
 
 export const CAMPAIGN_COLS =
@@ -110,4 +111,62 @@ export async function listPrizes(campaignId: string): Promise<PrizeRow[]> {
   const won = new Map<string, number>();
   for (const w of (wRes.data ?? []) as { prize_id: string }[]) won.set(w.prize_id, (won.get(w.prize_id) ?? 0) + 1);
   return ((pRes.data ?? []) as Omit<PrizeRow, 'winner_count'>[]).map((p) => ({ ...p, winner_count: won.get(p.id) ?? 0 }));
+}
+
+const QUESTION_COLS = 'id, prompt, option_a, option_b, correct, category, difficulty, archived_at, created_at';
+
+export async function listQuestionsPage(params: {
+  page: number;
+  search: string;
+  category: QuestionCategory | '';
+  difficulty: 0 | 1 | 2 | 3;
+  archived: boolean;
+}): Promise<Paged<QuestionRow>> {
+  await requireInternalAdmin();
+  const db = campaignDb();
+  const { search, category, difficulty, archived } = params;
+
+  let countQ = db.from('questions').select('id', { count: 'exact', head: true });
+  countQ = archived ? countQ.not('archived_at', 'is', null) : countQ.is('archived_at', null);
+  if (search) countQ = countQ.ilike('prompt', `%${escapeLike(search)}%`);
+  if (category) countQ = countQ.eq('category', category);
+  if (difficulty) countQ = countQ.eq('difficulty', difficulty);
+  const { count, error: cErr } = await countQ;
+  if (cErr) throw new Error(cErr.message);
+  const total = count ?? 0;
+  const page = clampPage(params.page, total);
+  const { from, to } = pageRange(page);
+
+  let rowsQ = db.from('questions').select(QUESTION_COLS);
+  rowsQ = archived ? rowsQ.not('archived_at', 'is', null) : rowsQ.is('archived_at', null);
+  if (search) rowsQ = rowsQ.ilike('prompt', `%${escapeLike(search)}%`);
+  if (category) rowsQ = rowsQ.eq('category', category);
+  if (difficulty) rowsQ = rowsQ.eq('difficulty', difficulty);
+  const { data, error } = await rowsQ.order('created_at', { ascending: false }).order('id').range(from, to);
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as Omit<QuestionRow, 'used_in'>[];
+
+  const ids = rows.map((r) => r.id);
+  const usage = new Map<string, QuestionRow['used_in']>();
+  if (ids.length > 0) {
+    const { data: slots, error: sErr } = await db
+      .from('question_slots')
+      .select('question_id, campaign_id, kind, for_date, week_no, campaigns(name)')
+      .in('question_id', ids);
+    if (sErr) throw new Error(sErr.message);
+    for (const s of (slots ?? []) as unknown as {
+      question_id: string; campaign_id: string; kind: string; for_date: string | null; week_no: number | null;
+      campaigns: { name: string } | null;
+    }[]) {
+      const list = usage.get(s.question_id) ?? [];
+      list.push({
+        campaign_id: s.campaign_id,
+        campaign_name: s.campaigns?.name ?? '-',
+        label: s.kind === 'daily' ? `Harian ${s.for_date}` : `Minggu ${s.week_no}`,
+      });
+      usage.set(s.question_id, list);
+    }
+  }
+
+  return { rows: rows.map((r) => ({ ...r, used_in: usage.get(r.id) ?? [] })), total, page };
 }

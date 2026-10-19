@@ -115,4 +115,16 @@ assert.ok(Number.isNaN(dirty.rules.grand_top_n));
 assert.match(validateCampaignInput(dirty) ?? '', /1–500/);
 assert.deepEqual(sanitizeCampaignInput(input, pre).rules, DEFAULT_RULES);
 
+// Task 6: question CSV (quoted commas, escaped quotes, CRLF, BOM, header-case, bad row line number)
+const qcsv = '\uFEFFprompt,option_a,option_b,correct,category,difficulty\r\n"Siapa, kah ""dia""?",Yesus,Musa,A,Alkitab,2\r\nIbu kota Indonesia?,Jakarta,Bandung,a,umum,1\r\n';
+const qp = parseQuestionCsv(qcsv);
+assert.equal(qp.errors.length, 0);
+assert.equal(qp.rows.length, 2);
+assert.equal(qp.rows[0].prompt, 'Siapa, kah "dia"?');
+assert.equal(qp.rows[0].correct, 'a');
+assert.equal(qp.rows[0].category, 'alkitab');
+assert.match(parseQuestionCsv(qcsv + 'Tes soal bagus,x,y,c,umum,1\n').errors[0], /^Baris 4: /);
+assert.match(parseQuestionCsv('prompt,option_a\n').errors[0], /Header harus persis/);
+assert.match(parseQuestionCsv('prompt,option_a,option_b,correct,category,difficulty\n"abc,d,e,a,umum,1\n').errors[0], /Tanda kutip tidak ditutup/);
+
 console.log('check-campaign-lib: all assertions passed');
