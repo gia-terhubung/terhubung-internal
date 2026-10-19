@@ -10,6 +10,12 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Campaign image uploads go through a server action (≤ 3 MB file + form overhead).
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '4mb',
+    },
+  },
 };
 
 export default nextConfig;
