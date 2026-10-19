@@ -292,15 +292,23 @@ export function validateQuestion(d: QuestionDraft): string | null {
 
 // ---------- CSV ----------
 
-/** RFC 4180 parser: quotes, "" escapes, CRLF/LF, UTF-8 BOM; drops fully blank rows. */
-export function parseCsv(text: string): string[][] {
-  const s = text.replace(/^﻿/, '');
-  const rows: string[][] = [];
+/**
+ * RFC 4180 parser: quotes, "" escapes, CRLF/LF, UTF-8 BOM; drops fully blank rows.
+ * `lines[i]` = 1-based physical source line where `rows[i]` starts (header = line 1);
+ * `unterminatedLine` = line where a quote was opened and never closed (else null).
+ */
+export function parseCsvLines(text: string): { rows: string[][]; lines: number[]; unterminatedLine: number | null } {
+  const s = text.replace(/^\uFEFF/, '');
+  const all: { cols: string[]; line: number }[] = [];
   let row: string[] = [];
   let field = '';
   let inQuotes = false;
+  let line = 1;
+  let rowLine = 1;
+  let quoteLine = 0;
   for (let i = 0; i < s.length; i++) {
     const ch = s[i];
+    if (ch === '\n') line++;
     if (inQuotes) {
       if (ch === '"') {
         if (s[i + 1] === '"') {
@@ -314,22 +322,30 @@ export function parseCsv(text: string): string[][] {
       }
       continue;
     }
-    if (ch === '"') inQuotes = true;
-    else if (ch === ',') {
+    if (ch === '"') {
+      inQuotes = true;
+      quoteLine = line;
+    } else if (ch === ',') {
       row.push(field);
       field = '';
     } else if (ch === '\n') {
       row.push(field);
-      rows.push(row);
+      all.push({ cols: row, line: rowLine });
       row = [];
       field = '';
+      rowLine = line;
     } else if (ch !== '\r') field += ch;
   }
   if (field !== '' || row.length > 0) {
     row.push(field);
-    rows.push(row);
+    all.push({ cols: row, line: rowLine });
   }
-  return rows.filter((r) => r.some((c) => c.trim() !== ''));
+  const kept = all.filter((r) => r.cols.some((c) => c.trim() !== ''));
+  return { rows: kept.map((r) => r.cols), lines: kept.map((r) => r.line), unterminatedLine: inQuotes ? quoteLine : null };
+}
+
+export function parseCsv(text: string): string[][] {
+  return parseCsvLines(text).rows;
 }
 
 export const QUESTION_CSV_HEADER = ['prompt', 'option_a', 'option_b', 'correct', 'category', 'difficulty'] as const;
@@ -341,7 +357,8 @@ export const QUESTION_CSV_HEADER = ['prompt', 'option_a', 'option_b', 'correct',
  * Any invalid row → errors (with 1-based file line numbers), rows still parsed for preview.
  */
 export function parseQuestionCsv(text: string): { rows: QuestionDraft[]; errors: string[] } {
-  const table = parseCsv(text);
+  const { rows: table, lines, unterminatedLine } = parseCsvLines(text);
+  if (unterminatedLine !== null) return { rows: [], errors: [`Tanda kutip tidak ditutup (mulai baris ${unterminatedLine}).`] };
   if (table.length === 0) return { rows: [], errors: ['File kosong.'] };
   const header = table[0].map((h) => h.trim().toLowerCase());
   if (header.join(',') !== QUESTION_CSV_HEADER.join(',')) {
@@ -350,7 +367,7 @@ export function parseQuestionCsv(text: string): { rows: QuestionDraft[]; errors:
   const rows: QuestionDraft[] = [];
   const errors: string[] = [];
   table.slice(1).forEach((cols, idx) => {
-    const line = idx + 2;
+    const line = lines[idx + 1];
     if (cols.length !== QUESTION_CSV_HEADER.length) {
       errors.push(`Baris ${line}: harus ${QUESTION_CSV_HEADER.length} kolom, ditemukan ${cols.length}.`);
       return;
@@ -379,7 +396,7 @@ export function toCsv(rows: (string | number | null)[][]): string {
 
 /** Browser-only: download rows as a UTF-8 CSV (BOM so Excel reads Indonesian text correctly). */
 export function downloadCsv(filename: string, rows: (string | number | null)[][]): void {
-  const blob = new Blob(['﻿' + toCsv(rows)], { type: 'text/csv;charset=utf-8' });
+  const blob = new Blob(['\uFEFF' + toCsv(rows)], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -392,6 +409,9 @@ export function downloadCsv(filename: string, rows: (string | number | null)[][]
 
 const RPC_ERRORS: Record<string, string> = {
   not_found: 'Data tidak ditemukan.',
+  not_frozen: 'Peserta belum dibekukan. Klik "Bekukan peserta" dulu.',
+  prize_exhausted: 'Semua unit hadiah ini sudah diundi.',
+  pool_empty: 'Peserta untuk jenis hadiah ini sudah habis.',
   not_test: 'Hanya bisa dipakai di campaign uji coba.',
   no_church: 'Tambahkan gereja peserta dulu.',
   note_required: 'Catatan wajib diisi.',

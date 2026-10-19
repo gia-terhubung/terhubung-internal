@@ -33,7 +33,7 @@ assert.equal(campaignDays(start, '2026-11-03T10:00:00+07:00').join(','), '2026-1
 const req = resolveRequirements(start, '2026-12-31T18:00:00+07:00', [2, 3, 4, 5, 6, 7, 8, 9, 10]);
 assert.deepEqual(req, { days: 61, lastDay: '2026-12-31', weeksInRange: 10, weeksAssigned: 9 });
 // L5 CSV: BOM, CRLF, quoted comma + escaped quote, trailing blank line
-const rows = parseCsv('﻿a,b\r\n"x, y","say ""hi"""\r\n\r\n');
+const rows = parseCsv('\uFEFFa,b\r\n"x, y","say ""hi"""\r\n\r\n');
 assert.deepEqual(rows, [['a', 'b'], ['x, y', 'say "hi"']]);
 assert.equal(toCsv([['x, y', 'say "hi"', 3, null]]), '"x, y","say ""hi""",3,\r\n');
 // L6 question CSV happy path
@@ -48,6 +48,15 @@ assert.deepEqual(ok.rows[0], {
 assert.match(parseQuestionCsv('question,a,b\nx,y,z').errors[0], /Header harus persis/);
 const bad = parseQuestionCsv('prompt,option_a,option_b,correct,category,difficulty\nHai?,A,B,c,umum,1\n');
 assert.match(bad.errors[0], /^Baris 2:/);
+// L7b real source lines: blank line, multi-line quoted field, unterminated quote
+const blankBefore = parseQuestionCsv('prompt,option_a,option_b,correct,category,difficulty\n\nHai?,A,B,c,umum,1\n');
+assert.match(blankBefore.errors[0], /^Baris 3:/);
+const multi = parseQuestionCsv('prompt,option_a,option_b,correct,category,difficulty\n"Satu\ndua?",A,B,a,umum,1\nHai?,A,B,c,umum,1\n');
+assert.equal(multi.rows.length, 1);
+assert.match(multi.errors[0], /^Baris 4:/);
+const open = parseQuestionCsv('prompt,option_a,option_b,correct,category,difficulty\nok,A,B,a,umum,1\n"belum,A,B,a,umum,1\n');
+assert.equal(open.errors.length, 1);
+assert.match(open.errors[0], /Tanda kutip tidak ditutup \(mulai baris 3\)/);
 // L8 status lifecycle
 const base = {
   id: 'x', name: 'Uji', status: 'published' as const, is_test: false, sim_now: null,
@@ -70,5 +79,8 @@ assert.match(validateCampaignInput({ ...input, rules: { ...DEFAULT_RULES, grand_
 assert.equal(DEFAULT_RULES.grand_top_n, 10);
 assert.ok(!('grand_checkin_pct' in DEFAULT_RULES));
 assert.match(rpcErrorMessage('prize_not_drawable'), /tidak diundi/);
+assert.equal(rpcErrorMessage('not_frozen'), 'Peserta belum dibekukan. Klik "Bekukan peserta" dulu.');
+assert.equal(rpcErrorMessage('prize_exhausted'), 'Semua unit hadiah ini sudah diundi.');
+assert.equal(rpcErrorMessage('pool_empty'), 'Peserta untuk jenis hadiah ini sudah habis.');
 
 console.log('check-campaign-lib: all assertions passed');
