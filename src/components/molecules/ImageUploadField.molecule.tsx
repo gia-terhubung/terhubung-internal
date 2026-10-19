@@ -20,19 +20,28 @@ export function ImageUploadField({
   const [error, setError] = useState<string | null>(null);
 
   async function upload(file: File) {
-    setBusy(true);
     setError(null);
+    if (file.size > 3 * 1024 * 1024) {
+      setError('Ukuran gambar maksimal 3 MB.');
+      return;
+    }
+    setBusy(true);
     const fd = new FormData();
     fd.set('file', file);
     fd.set('campaignId', campaignId);
     fd.set('kind', kind);
-    const res = await uploadCampaignImageAction(fd);
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.error);
-      return;
+    try {
+      const res = await uploadCampaignImageAction(fd);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      onChange(res.data.url);
+    } catch {
+      setError('Gagal mengunggah gambar. Coba lagi.');
+    } finally {
+      setBusy(false);
     }
-    onChange(res.data.url);
   }
 
   return (

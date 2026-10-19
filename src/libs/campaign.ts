@@ -274,6 +274,70 @@ export function validateCampaignInput(i: CampaignInput): string | null {
   return null;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isUuid(v: unknown): v is string {
+  return typeof v === 'string' && UUID_RE.test(v);
+}
+
+/** Public URL prefix of the campaign-assets bucket for a given Supabase URL. */
+export function campaignAssetPrefix(supabaseUrl: string): string {
+  return `${supabaseUrl.replace(/\/+$/, '')}/storage/v1/object/public/campaign-assets/`;
+}
+
+/** null unless the value is a URL inside the campaign-assets bucket. */
+export function sanitizeAssetUrl(v: unknown, prefix: string): string | null {
+  return typeof v === 'string' && v.startsWith(prefix) && !v.includes('..') ? v : null;
+}
+
+const str = (v: unknown, fallback = ''): string => (typeof v === 'string' ? v : fallback).trim();
+
+/**
+ * Rebuilds a CampaignInput from known keys only (untrusted client payload).
+ * Rules are always the full object (the mobile app reads every key); a
+ * non-numeric rule becomes NaN so validateCampaignInput rejects it.
+ */
+export function sanitizeCampaignInput(i: CampaignInput, assetPrefix: string): CampaignInput {
+  const rules = { ...DEFAULT_RULES };
+  for (const f of RULE_FIELDS) {
+    const v = (i.rules as unknown as Record<string, unknown> | undefined)?.[f.key];
+    rules[f.key] = typeof v === 'number' ? v : Number.NaN;
+  }
+  const modules = { ...DEFAULT_MODULES };
+  for (const k of Object.keys(DEFAULT_MODULES) as (keyof CampaignModules)[]) {
+    const v = (i.modules as unknown as Record<string, unknown> | undefined)?.[k];
+    modules[k] = typeof v === 'boolean' ? v : DEFAULT_MODULES[k];
+  }
+  const t = i.theme;
+  const colors = { ...DEFAULT_THEME.colors };
+  for (const k of Object.keys(colors) as (keyof CampaignTheme['colors'])[]) {
+    colors[k] = str(t?.colors?.[k], DEFAULT_THEME.colors[k]);
+  }
+  return {
+    name: str(i.name),
+    start_at: str(i.start_at),
+    close_at: str(i.close_at),
+    draw_at: str(i.draw_at),
+    is_test: i.is_test === true,
+    theme: {
+      title: str(t?.title),
+      subtitle: str(t?.subtitle),
+      verse: str(t?.verse),
+      banner_url: sanitizeAssetUrl(t?.banner_url, assetPrefix),
+      hero_url: sanitizeAssetUrl(t?.hero_url, assetPrefix),
+      colors,
+    },
+    venue: {
+      name: str(i.venue?.name),
+      address: str(i.venue?.address),
+      maps_url: str(i.venue?.maps_url),
+      note: str(i.venue?.note),
+    },
+    modules,
+    rules,
+  };
+}
+
 const CATEGORIES: QuestionCategory[] = ['umum', 'alkitab', 'gereja'];
 
 /** Mirrors the CHECK constraints on campaign.questions. */

@@ -6,7 +6,7 @@ import {
   DEFAULT_MODULES, DEFAULT_RULES, DEFAULT_THEME, DEFAULT_VENUE,
   campaignDays, computeStatus, isoToWibInput, parseCsv, parseQuestionCsv, rpcErrorMessage,
   countableWeeks, lastDay, resolveRequirements, toCsv, totalDays, validateCampaignInput, weekNo, weekRange, wibDate,
-  wibInputToIso,
+  wibInputToIso, isUuid, campaignAssetPrefix, sanitizeAssetUrl, sanitizeCampaignInput,
 } from '../src/libs/campaign.ts';
 
 // L1 WIB day: 2026-11-01 17:30 UTC = 2026-11-02 00:30 WIB
@@ -82,5 +82,25 @@ assert.match(rpcErrorMessage('prize_not_drawable'), /tidak diundi/);
 assert.equal(rpcErrorMessage('not_frozen'), 'Peserta belum dibekukan. Klik "Bekukan peserta" dulu.');
 assert.equal(rpcErrorMessage('prize_exhausted'), 'Semua unit hadiah ini sudah diundi.');
 assert.equal(rpcErrorMessage('pool_empty'), 'Peserta untuk jenis hadiah ini sudah habis.');
+
+// L11 hardening helpers
+assert.ok(isUuid('123e4567-e89b-12d3-a456-426614174000'));
+assert.ok(!isUuid('not-a-uuid') && !isUuid('') && !isUuid(null) && !isUuid("123e4567-e89b-12d3-a456-42661417400'"));
+const pre = campaignAssetPrefix('https://x.supabase.co/');
+assert.equal(pre, 'https://x.supabase.co/storage/v1/object/public/campaign-assets/');
+assert.equal(sanitizeAssetUrl(`${pre}abc/hero-1.png`, pre), `${pre}abc/hero-1.png`);
+assert.equal(sanitizeAssetUrl('https://evil.example/a.png', pre), null);
+assert.equal(sanitizeAssetUrl(`${pre}../x`, pre), null);
+assert.equal(sanitizeAssetUrl(5, pre), null);
+const dirty = sanitizeCampaignInput({ ...input, name: ' Natal ', extra: 1,
+  theme: { ...DEFAULT_THEME, hero_url: 'https://evil.example/a.png', banner_url: `${pre}a/b.png`, junk: 1 },
+  rules: { ...DEFAULT_RULES, grand_top_n: '5', evil: 1 }, modules: { ...DEFAULT_MODULES, x: true } } as never, pre);
+assert.equal(dirty.name, 'Natal');
+assert.ok(!('extra' in dirty) && !('junk' in dirty.theme) && !('evil' in dirty.rules) && !('x' in dirty.modules));
+assert.equal(dirty.theme.hero_url, null);
+assert.equal(dirty.theme.banner_url, `${pre}a/b.png`);
+assert.ok(Number.isNaN(dirty.rules.grand_top_n));
+assert.match(validateCampaignInput(dirty) ?? '', /1–500/);
+assert.deepEqual(sanitizeCampaignInput(input, pre).rules, DEFAULT_RULES);
 
 console.log('check-campaign-lib: all assertions passed');

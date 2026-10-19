@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
-import { DEFAULT_MODULES, DEFAULT_RULES, DEFAULT_THEME, diffDays, validateCampaignInput, wibDate } from '@/libs/campaign';
+import { DEFAULT_RULES, addDays, campaignAssetPrefix, diffDays, isUuid, sanitizeCampaignInput, validateCampaignInput, wibDate } from '@/libs/campaign';
 import type { ActionResult } from '@/types/internal.types';
 import type { ActionResultWith, CampaignInput, CampaignRow } from '@/types/campaign.types';
 
@@ -15,40 +15,19 @@ function campaignDb() {
 }
 
 function normalize(i: CampaignInput): CampaignInput {
-  return {
-    name: i.name.trim(),
-    start_at: i.start_at,
-    close_at: i.close_at,
-    draw_at: i.draw_at,
-    is_test: !!i.is_test,
-    theme: {
-      ...DEFAULT_THEME,
-      ...i.theme,
-      title: i.theme.title.trim(),
-      subtitle: i.theme.subtitle.trim(),
-      verse: i.theme.verse.trim(),
-      colors: { ...DEFAULT_THEME.colors, ...i.theme.colors },
-    },
-    venue: {
-      name: i.venue.name.trim(),
-      address: i.venue.address.trim(),
-      maps_url: i.venue.maps_url.trim(),
-      note: i.venue.note.trim(),
-    },
-    modules: { ...DEFAULT_MODULES, ...i.modules },
-    // Always the full object — the mobile app reads every key.
-    rules: { ...DEFAULT_RULES, ...i.rules },
-  };
+  return sanitizeCampaignInput(i, campaignAssetPrefix(process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''));
 }
 
 async function loadCampaign(id: string): Promise<CampaignRow | null> {
+  if (!isUuid(id)) return null;
   const { data, error } = await campaignDb().from('campaigns').select(COLS).eq('id', id).maybeSingle();
   if (error) throw new Error(error.message);
   return (data as CampaignRow) ?? null;
 }
 
 async function hasWinners(id: string): Promise<boolean> {
-  const { count } = await campaignDb().from('winners').select('id', { count: 'exact', head: true }).eq('campaign_id', id);
+  const { count, error } = await campaignDb().from('winners').select('id', { count: 'exact', head: true }).eq('campaign_id', id);
+  if (error) throw new Error(error.message);
   return (count ?? 0) > 0;
 }
 
@@ -152,14 +131,17 @@ export async function updateCampaignAction(id: string, input: CampaignInput): Pr
   if (error) return { ok: false, error: error.message };
 
   revalidatePath('/campaigns');
-  revalidatePath(`/campaigns/${id}`, 'layout');
+  revalidatePath('/campaigns/[id]', 'layout');
   return { ok: true };
 }
 
 export async function setCampaignStatusAction(id: string, next: 'published' | 'draft' | 'archived'): Promise<ActionResult> {
   await requireInternalAdmin();
+  if (next !== 'published' && next !== 'draft' && next !== 'archived') return { ok: false, error: 'Status tidak dikenal.' };
   const cur = await loadCampaign(id);
   if (!cur) return { ok: false, error: 'Campaign tidak ditemukan.' };
+  const allowed = next === 'archived' || (next === 'published' && cur.status === 'draft') || (next === 'draft' && cur.status !== 'draft');
+  if (!allowed || cur.status === next) return { ok: false, error: 'Perubahan status tidak diizinkan.' };
 
   if (next === 'published') {
     const churchIds = await churchIdsOf(id);
@@ -178,7 +160,7 @@ export async function setCampaignStatusAction(id: string, next: 'published' | 'd
   if (error) return { ok: false, error: error.message };
 
   revalidatePath('/campaigns');
-  revalidatePath(`/campaigns/${id}`, 'layout');
+  revalidatePath('/campaigns/[id]', 'layout');
   return { ok: true };
 }
 
@@ -218,43 +200,48 @@ export async function duplicateCampaignAction(id: string, newStartIso: string): 
   const newId = (created as { id: string }).id;
 
   const rollback = async (message: string): Promise<ActionResultWith<{ id: string }>> => {
-    await db.from('campaigns').delete().eq('id', newId);
-    return { ok: false, error: message };
+    const { error: delErr } = await db.from('campaigns').delete().eq('id', newId);
+    return {
+      ok: false,
+      error: delErr ? `${message} Salinan setengah jadi gagal dihapus (${newId}): ${delErr.message}` : message,
+    };
   };
 
-  const churchIds = await churchIdsOf(id);
-  if (churchIds.length > 0) {
-    const { error: e } = await db.from('campaign_churches').insert(churchIds.map((c) => ({ campaign_id: newId, church_id: c })));
-    if (e) return rollback(e.message);
-  }
+  try {
+    const churchIds = await churchIdsOf(id);
+    if (churchIds.length > 0) {
+      const { error: e } = await db.from('campaign_churches').insert(churchIds.map((c) => ({ campaign_id: newId, church_id: c })));
+      if (e) return await rollback(e.message);
+    }
 
-  const { data: prizes, error: pErr } = await db
-    .from('prizes')
-    .select('prize_type, name, image_url, quantity, sort_order')
-    .eq('campaign_id', id);
-  if (pErr) return rollback(pErr.message);
-  if ((prizes ?? []).length > 0) {
-    const { error: e } = await db.from('prizes').insert((prizes ?? []).map((p) => ({ ...p, campaign_id: newId })));
-    if (e) return rollback(e.message);
-  }
+    const { data: prizes, error: pErr } = await db
+      .from('prizes')
+      .select('prize_type, name, image_url, quantity, sort_order')
+      .eq('campaign_id', id);
+    if (pErr) return await rollback(pErr.message);
+    if ((prizes ?? []).length > 0) {
+      const { error: e } = await db.from('prizes').insert((prizes ?? []).map((p) => ({ ...p, campaign_id: newId })));
+      if (e) return await rollback(e.message);
+    }
 
-  const { data: slots, error: sErr } = await db
-    .from('question_slots')
-    .select('kind, for_date, week_no, position, question_id')
-    .eq('campaign_id', id);
-  if (sErr) return rollback(sErr.message);
-  const shiftedSlots = ((slots ?? []) as { kind: string; for_date: string | null; week_no: number | null; position: number; question_id: string }[]).map(
-    (s) => ({
-      ...s,
-      campaign_id: newId,
-      for_date: s.for_date
-        ? new Date(Date.parse(`${s.for_date}T00:00:00Z`) + deltaDays * 86400000).toISOString().slice(0, 10)
-        : null,
-    })
-  );
-  if (shiftedSlots.length > 0) {
-    const { error: e } = await db.from('question_slots').insert(shiftedSlots);
-    if (e) return rollback(e.message);
+    const { data: slots, error: sErr } = await db
+      .from('question_slots')
+      .select('kind, for_date, week_no, position, question_id')
+      .eq('campaign_id', id);
+    if (sErr) return await rollback(sErr.message);
+    const shiftedSlots = ((slots ?? []) as { kind: string; for_date: string | null; week_no: number | null; position: number; question_id: string }[]).map(
+      (s) => ({
+        ...s,
+        campaign_id: newId,
+        for_date: s.for_date ? addDays(s.for_date, deltaDays) : null,
+      })
+    );
+    if (shiftedSlots.length > 0) {
+      const { error: e } = await db.from('question_slots').insert(shiftedSlots);
+      if (e) return await rollback(e.message);
+    }
+  } catch (e) {
+    return rollback(e instanceof Error ? e.message : 'Gagal menyalin campaign.');
   }
 
   revalidatePath('/campaigns');

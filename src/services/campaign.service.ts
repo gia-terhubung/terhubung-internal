@@ -2,7 +2,7 @@ import 'server-only';
 import { cache } from 'react';
 import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
-import { computeStatus, defaultCampaignInput } from '@/libs/campaign';
+import { computeStatus, defaultCampaignInput, isUuid } from '@/libs/campaign';
 import type {
   CampaignDetail, CampaignInput, CampaignListItem, CampaignRow, ChurchOption,
 } from '@/types/campaign.types';
@@ -44,6 +44,7 @@ export async function listCampaigns(): Promise<CampaignListItem[]> {
 /** Campaign + churches + lifecycle + server-enforced edit locks. Cached per request (layout + page). */
 export const getCampaignDetail = cache(async (id: string): Promise<CampaignDetail | null> => {
   await requireInternalAdmin();
+  if (!isUuid(id)) return null;
   const admin = createAdminClient();
   const db = admin.schema('campaign');
 
@@ -58,6 +59,8 @@ export const getCampaignDetail = cache(async (id: string): Promise<CampaignDetai
     db.from('question_slots').select('kind, week_no, for_date').eq('campaign_id', id),
   ]);
   if (ccRes.error) throw new Error(ccRes.error.message);
+  if (wRes.error) throw new Error(wRes.error.message);
+  if (wkRes.error) throw new Error(wkRes.error.message);
 
   const ids = ((ccRes.data ?? []) as { church_id: string }[]).map((r) => r.church_id);
   let churches: ChurchOption[] = [];
