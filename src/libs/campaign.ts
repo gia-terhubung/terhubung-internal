@@ -280,14 +280,30 @@ export function isUuid(v: unknown): v is string {
   return typeof v === 'string' && UUID_RE.test(v);
 }
 
-/** Public URL prefix of the campaign-assets bucket for a given Supabase URL. */
-export function campaignAssetPrefix(supabaseUrl: string): string {
-  return `${supabaseUrl.replace(/\/+$/, '')}/storage/v1/object/public/campaign-assets/`;
+/** Public URL prefix of the campaign-assets bucket; null unless base is an https:// URL. */
+export function campaignAssetPrefix(supabaseUrl: string): string | null {
+  const base = (supabaseUrl ?? '').trim();
+  if (!base.startsWith('https://')) return null;
+  try {
+    const u = new URL(base);
+    return `${u.origin}/storage/v1/object/public/campaign-assets/`;
+  } catch {
+    return null;
+  }
 }
 
-/** null unless the value is a URL inside the campaign-assets bucket. */
-export function sanitizeAssetUrl(v: unknown, prefix: string): string | null {
-  return typeof v === 'string' && v.startsWith(prefix) && !v.includes('..') ? v : null;
+/** null unless the value is an https URL inside the campaign-assets bucket. Query and hash are dropped. */
+export function sanitizeAssetUrl(v: unknown, prefix: string | null): string | null {
+  if (prefix === null || typeof v !== 'string') return null;
+  if (/%2e|%2f|%5c|\\|\.\./i.test(v)) return null;
+  try {
+    const u = new URL(v);
+    const p = new URL(prefix);
+    if (u.protocol !== 'https:' || u.origin !== p.origin || !u.pathname.startsWith(p.pathname)) return null;
+    return u.origin + u.pathname;
+  } catch {
+    return null;
+  }
 }
 
 const str = (v: unknown, fallback = ''): string => (typeof v === 'string' ? v : fallback).trim();
@@ -297,7 +313,7 @@ const str = (v: unknown, fallback = ''): string => (typeof v === 'string' ? v : 
  * Rules are always the full object (the mobile app reads every key); a
  * non-numeric rule becomes NaN so validateCampaignInput rejects it.
  */
-export function sanitizeCampaignInput(i: CampaignInput, assetPrefix: string): CampaignInput {
+export function sanitizeCampaignInput(i: CampaignInput, assetPrefix: string | null): CampaignInput {
   const rules = { ...DEFAULT_RULES };
   for (const f of RULE_FIELDS) {
     const v = (i.rules as unknown as Record<string, unknown> | undefined)?.[f.key];

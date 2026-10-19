@@ -266,6 +266,9 @@ export async function uploadCampaignImageAction(formData: FormData): Promise<Act
   if (!(await loadCampaign(campaignId))) return { ok: false, error: 'Campaign tidak ditemukan.' };
 
   const path = `${campaignId}/${kind}-${crypto.randomUUID()}.${ext}`;
+  if (campaignAssetPrefix(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '') === null) {
+    return { ok: false, error: 'Konfigurasi storage belum lengkap.' };
+  }
   const storage = createAdminClient().storage.from('campaign-assets');
   const { error } = await storage.upload(path, file, { contentType: file.type, upsert: false });
   if (error) return { ok: false, error: error.message };

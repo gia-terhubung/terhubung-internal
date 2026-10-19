@@ -91,6 +91,18 @@ assert.equal(pre, 'https://x.supabase.co/storage/v1/object/public/campaign-asset
 assert.equal(sanitizeAssetUrl(`${pre}abc/hero-1.png`, pre), `${pre}abc/hero-1.png`);
 assert.equal(sanitizeAssetUrl('https://evil.example/a.png', pre), null);
 assert.equal(sanitizeAssetUrl(`${pre}../x`, pre), null);
+assert.equal(sanitizeAssetUrl(`${pre}%2e%2e/other/x.png`, pre), null);
+assert.equal(sanitizeAssetUrl(`${pre}%2E%2E/other/x.png`, pre), null);
+assert.equal(sanitizeAssetUrl(`${pre}a%2fb.png`, pre), null);
+assert.equal(sanitizeAssetUrl(`${pre}a\\b.png`, pre), null);
+assert.equal(sanitizeAssetUrl('https://y.supabase.co/storage/v1/object/public/campaign-assets/a.png', pre), null);
+assert.equal(sanitizeAssetUrl('http://x.supabase.co/storage/v1/object/public/campaign-assets/a.png', pre), null);
+assert.equal(sanitizeAssetUrl('/storage/v1/object/public/campaign-assets/a.png', pre), null);
+assert.equal(sanitizeAssetUrl(`${pre}a/b.png?x=1#h`, pre), `${pre}a/b.png`);
+assert.equal(campaignAssetPrefix(''), null);
+assert.equal(campaignAssetPrefix('http://x.supabase.co'), null);
+assert.equal(sanitizeAssetUrl(`${pre}a.png`, campaignAssetPrefix('')), null);
+assert.equal(sanitizeCampaignInput({ ...input, theme: { ...DEFAULT_THEME, hero_url: `${pre}a.png` } }, null).theme.hero_url, null);
 assert.equal(sanitizeAssetUrl(5, pre), null);
 const dirty = sanitizeCampaignInput({ ...input, name: ' Natal ', extra: 1,
   theme: { ...DEFAULT_THEME, hero_url: 'https://evil.example/a.png', banner_url: `${pre}a/b.png`, junk: 1 },
