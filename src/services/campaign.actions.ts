@@ -311,13 +311,20 @@ export async function setCampaignChurchesAction(id: string, churchIds: string[])
     if (overlap) return { ok: false, error: overlap };
   }
 
-  const db = campaignDb();
-  if (toRemove.length > 0) {
-    const { error } = await db.from('campaign_churches').delete().eq('campaign_id', id).in('church_id', toRemove);
-    if (error) return { ok: false, error: error.message };
+  if (toAdd.length > 0) {
+    const { data: found, error: fErr } = await createAdminClient().from('churches').select('id').in('id', toAdd);
+    if (fErr) return { ok: false, error: fErr.message };
+    if ((found ?? []).length !== toAdd.length) return { ok: false, error: 'Gereja tidak ditemukan.' };
   }
+
+  // Insert before delete: a midway failure leaves a harmless superset.
+  const db = campaignDb();
   if (toAdd.length > 0) {
     const { error } = await db.from('campaign_churches').insert(toAdd.map((c) => ({ campaign_id: id, church_id: c })));
+    if (error) return { ok: false, error: error.message };
+  }
+  if (toRemove.length > 0) {
+    const { error } = await db.from('campaign_churches').delete().eq('campaign_id', id).in('church_id', toRemove);
     if (error) return { ok: false, error: error.message };
   }
 

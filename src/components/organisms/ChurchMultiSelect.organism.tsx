@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { SearchInput } from '@/components/atoms/SearchInput.atom';
 import { searchChurchesAction, setCampaignChurchesAction } from '@/services/campaign.actions';
@@ -13,14 +13,20 @@ export function ChurchMultiSelect({ campaignId, initial }: { campaignId: string;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const reqId = useRef(0);
 
   const dirty =
     selected.length !== initial.length || selected.some((s) => !initial.find((i) => i.id === s.id));
 
   async function search(q: string) {
+    const my = ++reqId.current;
     try {
-      setResults(q.trim() ? await searchChurchesAction(q) : []);
+      const r = q.trim() ? await searchChurchesAction(q) : [];
+      if (my !== reqId.current) return;
+      setResults(r);
+      setError(null);
     } catch (e) {
+      if (my !== reqId.current) return;
       setError(e instanceof Error ? e.message : 'Pencarian gagal.');
     }
   }
@@ -68,7 +74,7 @@ export function ChurchMultiSelect({ campaignId, initial }: { campaignId: string;
                 <li key={r.id}>
                   <button
                     disabled={picked}
-                    onClick={() => { setSaved(false); setSelected((s) => [...s, r]); }}
+                    onClick={() => { setSaved(false); setError(null); setSelected((s) => [...s, r]); }}
                     className="flex w-full justify-between px-3 py-2 text-left text-sm text-text-primary hover:bg-bg-hover disabled:opacity-50"
                   >
                     <span>{r.name}</span>

@@ -75,7 +75,7 @@ export function CampaignSettingsClient({ detail }: { detail: CampaignDetail }) {
         dailyDates={detail.daily_dates}
       />
 
-      <ChurchMultiSelect key={detail.churches.map((x) => x.id).join(',')} campaignId={c.id} initial={detail.churches} />
+      <ChurchMultiSelect campaignId={c.id} initial={detail.churches} />
 
       {pending && (
         <ConfirmDialog
