@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Badge } from '@/components/atoms/Badge.atom';
 import { downloadCsv, formatWib } from '@/libs/campaign';
 import type { AdminTopRow, AdminWinnerRow, CampaignRow } from '@/types/campaign.types';
@@ -34,10 +35,20 @@ export function WinnersClient({
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-text-secondary">
-        Hadiah diterima langsung di lokasi acara. Hubungi pemenang yang tidak hadir lewat nomor telepon di bawah. Pemenang
-        bertanda &quot;Tanpa aplikasi&quot; tidak menerima notifikasi, jadi hubungi lewat telepon.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="text-sm text-text-secondary">
+          Hadiah diterima langsung di lokasi acara. Hubungi pemenang yang tidak hadir lewat nomor telepon di bawah. Pemenang
+          bertanda &quot;Tanpa aplikasi&quot; tidak menerima notifikasi, jadi hubungi lewat telepon.
+        </p>
+        <div className="flex gap-2">
+          <Link href={`/campaigns/${campaign.id}/draw`} className="rounded-lg bg-bg-hover px-4 py-2 text-sm text-text-primary hover:bg-bg-tertiary">
+            Buka konsol undian
+          </Link>
+          <Link href={`/campaigns/${campaign.id}/stage`} target="_blank" rel="noopener" className="rounded-lg bg-bg-hover px-4 py-2 text-sm text-text-primary hover:bg-bg-tertiary">
+            Buka layar panggung
+          </Link>
+        </div>
+      </div>
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
