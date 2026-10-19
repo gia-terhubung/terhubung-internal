@@ -195,7 +195,6 @@ export interface ParticipantRow {
 
 export interface MonitorData {
   stats: AdminStatsRow[];
-  eligibleTotal: number;
   grandQuantity: number; // sum of grand prize quantities
   participants: ParticipantRow[];
   total: number;

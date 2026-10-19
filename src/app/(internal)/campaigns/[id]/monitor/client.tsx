@@ -38,10 +38,10 @@ export function MonitorClient({
 
   return (
     <div className="space-y-6">
-      {data.grandQuantity > data.eligibleTotal && (
+      {data.grandQuantity > data.top.length && (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-text-primary">
           Hadiah utama diundi dari {topN} besar. Jumlah hadiah utama ({data.grandQuantity}) lebih banyak dari peserta {topN} besar
-          saat ini ({data.eligibleTotal}); sisa hadiah tidak bisa diundi. Kurangi jumlah hadiah utama sebelum undian.
+          saat ini ({data.top.length}); sisa hadiah tidak bisa diundi. Kurangi jumlah hadiah utama sebelum undian.
         </div>
       )}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
@@ -50,7 +50,7 @@ export function MonitorClient({
           ['Sudah setuju aturan', totals.consented],
           ['Punya poin (minimal 1)', totals.participants],
           ['Check-in hari ini', totals.today],
-          [`${topN} besar saat ini`, data.eligibleTotal],
+          [`${topN} besar saat ini`, data.top.length],
         ].map(([label, value]) => (
           <div key={label as string} className="rounded-xl border border-border-color bg-bg-secondary p-4">
             <div className="text-sm text-text-secondary">{label}</div>

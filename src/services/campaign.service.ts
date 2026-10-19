@@ -255,7 +255,6 @@ export async function getMonitor(
   const stats = (statsRes.data ?? []) as AdminStatsRow[];
   return {
     stats,
-    eligibleTotal: stats.reduce((n, s) => n + s.grand_eligible, 0),
     grandQuantity: ((grandRes.data ?? []) as { quantity: number }[]).reduce((n, p) => n + p.quantity, 0),
     participants: rows,
     total: Number(rows[0]?.total_count ?? 0),
