@@ -189,6 +189,7 @@ export interface ParticipantRow {
   prayers: number;
   comments: number;
   eligible: boolean;
+  total_count: number; // window count of all rows matching the filter (bigint: coerce with Number)
 }
 
 export interface MonitorData {

@@ -3,9 +3,9 @@ import { cache } from 'react';
 import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
 import { computeStatus, defaultCampaignInput, isUuid } from '@/libs/campaign';
-import { clampPage, escapeLike, pageRange, type Paged } from '@/libs/pagination';
+import { PAGE_SIZE, clampPage, escapeLike, pageRange, type Paged } from '@/libs/pagination';
 import type {
-  CampaignDetail, CampaignInput, CampaignListItem, CampaignRow, ChurchOption, PrizeRow, QuestionCategory, QuestionRow, SlotRow,
+  AdminStatsRow, AdminTopRow, CampaignDetail, CampaignInput, CampaignListItem, CampaignRow, ChurchOption, MonitorData, ParticipantRow, PrizeRow, QuestionCategory, QuestionRow, SlotRow,
 } from '@/types/campaign.types';
 
 export const CAMPAIGN_COLS =
@@ -203,4 +203,62 @@ export async function getSchedule(campaignId: string): Promise<SlotRow[]> {
     category: r.questions?.category ?? 'umum',
     locked: locked.has(r.id),
   }));
+}
+
+/** Top N overall (plan 1B): live before freeze (frozen = false), the frozen list after. */
+export async function getTop(campaignId: string): Promise<AdminTopRow[]> {
+  await requireInternalAdmin();
+  if (!isUuid(campaignId)) return [];
+  const { data, error } = await campaignDb().rpc('admin_top', { p_campaign: campaignId });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as AdminTopRow[];
+}
+
+export async function getMonitor(
+  campaignId: string,
+  params: { church: string; search: string; page: number }
+): Promise<MonitorData> {
+  await requireInternalAdmin();
+  if (!isUuid(campaignId)) throw new Error('Campaign tidak valid.');
+  const church = isUuid(params.church) ? params.church : '';
+  const db = campaignDb();
+  const fetchPage = (page: number) =>
+    db.rpc('admin_participants', {
+      p_campaign: campaignId,
+      p_church: church || null,
+      p_search: params.search || null,
+      p_limit: PAGE_SIZE,
+      p_offset: (page - 1) * PAGE_SIZE,
+    });
+
+  const [statsRes, partRes, grandRes, top] = await Promise.all([
+    db.rpc('admin_stats', { p_campaign: campaignId }),
+    fetchPage(params.page),
+    db.from('prizes').select('quantity').eq('campaign_id', campaignId).eq('prize_type', 'grand'),
+    getTop(campaignId),
+  ]);
+  if (statsRes.error) throw new Error(statsRes.error.message);
+  if (partRes.error) throw new Error(partRes.error.message);
+  if (grandRes.error) throw new Error(grandRes.error.message);
+
+  let page = params.page;
+  let rows = (partRes.data ?? []) as ParticipantRow[];
+  // Stale ?page beyond the end: fall back to page 1.
+  if (rows.length === 0 && page > 1) {
+    page = 1;
+    const retry = await fetchPage(1);
+    if (retry.error) throw new Error(retry.error.message);
+    rows = (retry.data ?? []) as ParticipantRow[];
+  }
+
+  const stats = (statsRes.data ?? []) as AdminStatsRow[];
+  return {
+    stats,
+    eligibleTotal: stats.reduce((n, s) => n + s.grand_eligible, 0),
+    grandQuantity: ((grandRes.data ?? []) as { quantity: number }[]).reduce((n, p) => n + p.quantity, 0),
+    participants: rows,
+    total: Number(rows[0]?.total_count ?? 0),
+    page,
+    top,
+  };
 }
