@@ -126,7 +126,7 @@ export function ScheduleClient({ campaign, slots }: { campaign: CampaignRow; slo
             return (
               <div key={w}>
                 <div className="mb-2 text-sm font-medium text-text-primary">
-                  Minggu {w} <span className="font-normal text-text-secondary">· {formatDay(r.from)} – {formatDay(r.to)}</span>
+                  Minggu {w} <span className="font-normal text-text-secondary">· {formatDay(r.from)} – {formatDay(r.to < last ? r.to : last)}</span>
                   {(() => { const n = weekly.filter((s) => s.week_no === w).length; return n > 0 && n < 5 ? <span className="ml-2 text-xs text-danger">{n}/5 soal — isi semua 5 slot</span> : null; })()}
                 </div>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">

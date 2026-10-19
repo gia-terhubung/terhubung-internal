@@ -38,7 +38,11 @@ assert.deepEqual(rows, [['a', 'b'], ['x, y', 'say "hi"']]);
 assert.equal(toCsv([['x, y', 'say "hi"', 3, null]]), '"x, y","say ""hi""",3,\r\n');
 // CSV formula injection guard
 assert.equal(toCsv([['=HYPERLINK("http://x","y")']]), "\"'=HYPERLINK(\"\"http://x\"\",\"\"y\"\")\"\r\n");
-assert.equal(toCsv([['+628123']]), "'+628123\r\n");
+assert.equal(toCsv([['+628123456789']]), '+628123456789\r\n');
+assert.equal(toCsv([['+62 812-3456']]), '+62 812-3456\r\n');
+assert.equal(toCsv([['+1+1']]), "'+1+1\r\n");
+assert.equal(toCsv([['=1+1']]), "'=1+1\r\n");
+assert.equal(toCsv([['+HYPERLINK(']]), "'+HYPERLINK(\r\n");
 assert.equal(toCsv([['-5']]), "'-5\r\n");
 assert.equal(toCsv([['@x']]), "'@x\r\n");
 assert.equal(toCsv([[-5, 'Budi Santoso']]), '-5,Budi Santoso\r\n');
@@ -133,8 +137,6 @@ assert.match(parseQuestionCsv(qcsv + 'Tes soal bagus,x,y,c,umum,1\n').errors[0],
 assert.match(parseQuestionCsv('prompt,option_a\n').errors[0], /Header harus persis/);
 assert.match(parseQuestionCsv('prompt,option_a,option_b,correct,category,difficulty\n"abc,d,e,a,umum,1\n').errors[0], /Tanda kutip tidak ditutup/);
 
-console.log('check-campaign-lib: all assertions passed');
-
 // T7 out-of-period slots: close 26 Dec 00:00 WIB -> last day 25 Dec; start Mon 16 Nov (week 6 = 21-27 Dec, Monday 21 Dec <= 25 Dec; week 7 Monday 28 Dec)
 {
   const s7 = '2026-11-16T00:00:00+07:00';
@@ -144,3 +146,5 @@ console.log('check-campaign-lib: all assertions passed');
   assert.equal(slotOutOfPeriod(s7, c7, { kind: 'weekly', for_date: null, week_no: 6 }), false);
   assert.equal(slotOutOfPeriod(s7, c7, { kind: 'weekly', for_date: null, week_no: 7 }), true);
 }
+
+console.log('check-campaign-lib: all assertions passed');

@@ -21,10 +21,15 @@ export function DuplicateCampaignModal({
   async function submit() {
     setBusy(true);
     setError(null);
-    const res = await duplicateCampaignAction(campaign.id, wibInputToIso(`${day}T${startLocal.slice(11)}`));
-    setBusy(false);
-    if (!res.ok) return setError(res.error);
-    router.push(`/campaigns/${res.data.id}`);
+    try {
+      const res = await duplicateCampaignAction(campaign.id, wibInputToIso(`${day}T${startLocal.slice(11)}`));
+      if (!res.ok) return setError(res.error);
+      router.push(`/campaigns/${res.data.id}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Gagal menduplikat campaign.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

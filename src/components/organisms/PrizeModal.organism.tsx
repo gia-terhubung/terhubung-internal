@@ -86,7 +86,7 @@ export function PrizeModal({
             </label>
           </div>
           <ImageUploadField label="Foto hadiah" campaignId={campaignId} kind="prize" value={form.image_url}
-            onChange={(url) => setForm({ ...form, image_url: url })} />
+            onChange={(url) => setForm((f) => ({ ...f, image_url: url }))} />
           {prize && prize.winner_count > 0 && (
             <p className="text-xs text-text-secondary">
               Sudah ada {prize.winner_count} pemenang: jenis hadiah terkunci dan jumlah tidak boleh kurang dari {prize.winner_count}.

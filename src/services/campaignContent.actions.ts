@@ -250,7 +250,7 @@ export async function assignSlotAction(input: {
       if (error) return { ok: false, error: slotWriteErrorMessage(error) };
     }
 
-    revalidatePath(`/campaigns/${c.id}`, 'layout');
+    revalidatePath('/campaigns/[id]', 'layout');
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Gagal menyimpan jadwal.' };
@@ -300,7 +300,7 @@ export async function autofillDailyAction(campaignId: string): Promise<ActionRes
       const { error } = await db.from('question_slots').insert(rows);
       if (error) return { ok: false, error: slotWriteErrorMessage(error) };
     }
-    revalidatePath(`/campaigns/${c.id}`, 'layout');
+    revalidatePath('/campaigns/[id]', 'layout');
     return { ok: true, data: { filled: rows.length, missing: empty.length - rows.length } };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Gagal mengisi otomatis.' };
@@ -326,7 +326,7 @@ export async function removeSlotsAction(campaignId: string, slotIds: string[]): 
       if (error) return { ok: false, error: slotWriteErrorMessage(error) };
       removed = (data ?? []).length;
     }
-    revalidatePath(`/campaigns/${campaignId}`, 'layout');
+    revalidatePath('/campaigns/[id]', 'layout');
     return { ok: true, data: { removed, kept: slotIds.length - removed } };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Gagal menghapus soal.' };

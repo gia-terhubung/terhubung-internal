@@ -93,18 +93,23 @@ export function CampaignSettingsForm({
   async function save() {
     setSaving(true);
     setError(null);
-    if (mode === 'create') {
-      const res = await createCampaignAction(form);
-      setSaving(false);
+    setSaved(false);
+    try {
+      if (mode === 'create') {
+        const res = await createCampaignAction(form);
+        if (!res.ok) return setError(res.error);
+        router.push(`/campaigns/${res.data.id}`);
+        return;
+      }
+      const res = await updateCampaignAction(campaignId!, form);
       if (!res.ok) return setError(res.error);
-      router.push(`/campaigns/${res.data.id}`);
-      return;
+      setSaved(true);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Gagal menyimpan. Coba lagi.');
+    } finally {
+      setSaving(false);
     }
-    const res = await updateCampaignAction(campaignId!, form);
-    setSaving(false);
-    if (!res.ok) return setError(res.error);
-    setSaved(true);
-    router.refresh();
   }
 
   const ruleInputs = (group: RuleField['group']) => (
@@ -122,8 +127,12 @@ export function CampaignSettingsForm({
             step={1}
             value={Number.isNaN(form.rules[f.key]) ? '' : form.rules[f.key]}
             onChange={(e) => setRule(f.key, e.target.value === '' ? NaN : Number(e.target.value))}
+            disabled={f.key === 'grand_top_n' && locks.topN}
             className={inputCls}
           />
+          {f.key === 'grand_top_n' && locks.topN && (
+            <span className="mt-1 block text-xs text-text-secondary">Terkunci: peserta sudah dibekukan.</span>
+          )}
         </label>
       ))}
     </div>
@@ -204,9 +213,9 @@ export function CampaignSettingsForm({
           {mode === 'edit' && campaignId ? (
             <>
               <ImageUploadField label="Banner" campaignId={campaignId} kind="banner" value={form.theme.banner_url}
-                onChange={(url) => patch({ theme: { ...form.theme, banner_url: url } })} />
+                onChange={(url) => { setSaved(false); setForm((f) => ({ ...f, theme: { ...f.theme, banner_url: url } })); }} />
               <ImageUploadField label="Gambar utama" campaignId={campaignId} kind="hero" value={form.theme.hero_url}
-                onChange={(url) => patch({ theme: { ...form.theme, hero_url: url } })} />
+                onChange={(url) => { setSaved(false); setForm((f) => ({ ...f, theme: { ...f.theme, hero_url: url } })); }} />
             </>
           ) : (
             <p className="text-sm text-text-secondary sm:col-span-2">Gambar bisa diunggah setelah campaign disimpan.</p>

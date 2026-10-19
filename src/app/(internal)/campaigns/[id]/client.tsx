@@ -43,10 +43,15 @@ export function CampaignSettingsClient({ detail }: { detail: CampaignDetail }) {
 
   async function changeStatus(next: StatusChange) {
     setError(null);
-    const res = await setCampaignStatusAction(c.id, next);
-    setPending(null);
-    if (!res.ok) return setError(res.error);
-    router.refresh();
+    try {
+      const res = await setCampaignStatusAction(c.id, next);
+      if (!res.ok) return setError(res.error);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Gagal mengubah status.');
+    } finally {
+      setPending(null);
+    }
   }
 
   const btn = 'rounded-lg bg-bg-hover px-3 py-1.5 text-sm text-text-primary hover:bg-bg-tertiary';
@@ -67,7 +72,6 @@ export function CampaignSettingsClient({ detail }: { detail: CampaignDetail }) {
       </div>
 
       <CampaignSettingsForm
-        key={c.updated_at}
         mode="edit"
         campaignId={c.id}
         initial={toCampaignInput(c)}
@@ -78,7 +82,7 @@ export function CampaignSettingsClient({ detail }: { detail: CampaignDetail }) {
 
       <ChurchMultiSelect campaignId={c.id} initial={detail.churches} />
 
-      {c.is_test && <TestToolsPanel key={c.updated_at} campaign={c} />}
+      {c.is_test && <TestToolsPanel campaign={c} />}
 
       {pending && (
         <ConfirmDialog

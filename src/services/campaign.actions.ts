@@ -32,6 +32,23 @@ async function hasWinners(id: string): Promise<boolean> {
   return (count ?? 0) > 0;
 }
 
+const TEST_DATA_TABLES = ['point_events', 'attempts', 'consents', 'dummy_users', 'draw_pool', 'winners'];
+
+async function hasTestData(id: string): Promise<boolean> {
+  const db = campaignDb();
+  const res = await Promise.all(
+    TEST_DATA_TABLES.map((t) => db.from(t).select('*', { count: 'exact', head: true }).eq('campaign_id', id))
+  );
+  for (const r of res) if (r.error) throw new Error(r.error.message);
+  return res.some((r) => (r.count ?? 0) > 0);
+}
+
+async function hasPointEvents(id: string): Promise<boolean> {
+  const { count, error } = await campaignDb().from('point_events').select('*', { count: 'exact', head: true }).eq('campaign_id', id);
+  if (error) throw new Error(error.message);
+  return (count ?? 0) > 0;
+}
+
 async function churchIdsOf(id: string): Promise<string[]> {
   const { data, error } = await campaignDb().from('campaign_churches').select('church_id').eq('campaign_id', id);
   if (error) throw new Error(error.message);
@@ -98,6 +115,14 @@ export async function createCampaignAction(input: CampaignInput): Promise<Action
 
 export async function updateCampaignAction(id: string, input: CampaignInput): Promise<ActionResult> {
   await requireInternalAdmin();
+  try {
+    return await updateCampaign(id, input);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Gagal menyimpan campaign.' };
+  }
+}
+
+async function updateCampaign(id: string, input: CampaignInput): Promise<ActionResult> {
   const data = normalize(input);
   const err = validateCampaignInput(data);
   if (err) return { ok: false, error: err };
@@ -121,6 +146,15 @@ export async function updateCampaignAction(id: string, input: CampaignInput): Pr
   if (data.is_test !== cur.is_test && cur.status !== 'draft') {
     return { ok: false, error: 'Jenis campaign (uji coba atau asli) hanya bisa diubah saat draft.' };
   }
+  if (data.is_test !== cur.is_test && (await hasTestData(id))) {
+    return {
+      ok: false,
+      error: 'Data uji coba/peserta sudah ada. Reset data uji dulu (hanya untuk campaign uji coba) sebelum mengubah jenis campaign.',
+    };
+  }
+  if (cur.frozen_at && data.rules.grand_top_n !== cur.rules.grand_top_n) {
+    return { ok: false, error: 'Jumlah peringkat teratas terkunci setelah peserta dibekukan.' };
+  }
   if (cur.status === 'published') {
     const overlap = await overlapError(id, await churchIdsOf(id), data.start_at, data.draw_at);
     if (overlap) return { ok: false, error: overlap };
@@ -139,6 +173,14 @@ export async function updateCampaignAction(id: string, input: CampaignInput): Pr
 
 export async function setCampaignStatusAction(id: string, next: 'published' | 'draft' | 'archived'): Promise<ActionResult> {
   await requireInternalAdmin();
+  try {
+    return await setCampaignStatus(id, next);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Gagal mengubah status.' };
+  }
+}
+
+async function setCampaignStatus(id: string, next: 'published' | 'draft' | 'archived'): Promise<ActionResult> {
   if (next !== 'published' && next !== 'draft' && next !== 'archived') return { ok: false, error: 'Status tidak dikenal.' };
   const cur = await loadCampaign(id);
   if (!cur) return { ok: false, error: 'Campaign tidak ditemukan.' };
@@ -153,6 +195,10 @@ export async function setCampaignStatusAction(id: string, next: 'published' | 'd
   }
   if (next === 'draft' && cur.status === 'published' && !cur.is_test && Date.now() >= Date.parse(cur.start_at)) {
     return { ok: false, error: 'Campaign yang sudah berjalan tidak bisa dikembalikan ke draft. Arsipkan bila perlu.' };
+  }
+  // Same rule for a restore: a real campaign that started (or has points) must not become editable again.
+  if (next === 'draft' && cur.status === 'archived' && !cur.is_test && (Date.now() >= Date.parse(cur.start_at) || (await hasPointEvents(id)))) {
+    return { ok: false, error: 'Campaign yang sudah berjalan tidak bisa dikembalikan ke draft.' };
   }
 
   const { error } = await campaignDb()
@@ -172,6 +218,14 @@ export async function setCampaignStatusAction(id: string, next: 'published' | 'd
 // campaign is deleted (FK cascade removes its children).
 export async function duplicateCampaignAction(id: string, newStartIso: string): Promise<ActionResultWith<{ id: string }>> {
   const { user } = await requireInternalAdmin();
+  try {
+    return await duplicateCampaign(id, newStartIso, user.id);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Gagal menduplikat campaign.' };
+  }
+}
+
+async function duplicateCampaign(id: string, newStartIso: string, userId: string): Promise<ActionResultWith<{ id: string }>> {
   if (Number.isNaN(Date.parse(newStartIso))) return { ok: false, error: 'Tanggal mulai baru tidak valid.' };
   const cur = await loadCampaign(id);
   if (!cur) return { ok: false, error: 'Campaign tidak ditemukan.' };
@@ -194,7 +248,7 @@ export async function duplicateCampaignAction(id: string, newStartIso: string): 
       venue: cur.venue,
       modules: cur.modules,
       rules: { ...DEFAULT_RULES, ...cur.rules },
-      created_by: user.id,
+      created_by: userId,
     })
     .select('id')
     .single();

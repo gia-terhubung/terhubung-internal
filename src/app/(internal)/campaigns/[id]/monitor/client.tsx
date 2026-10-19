@@ -10,9 +10,9 @@ import { PAGE_SIZE } from '@/libs/pagination';
 import type { ChurchOption, MonitorData, ParticipantRow } from '@/types/campaign.types';
 
 export function MonitorClient({
-  campaignId, churches, data, church, search, topN,
+  campaignId, churches, data, church, search, topN, frozen,
 }: {
-  campaignId: string; churches: ChurchOption[]; data: MonitorData; church: string; search: string; topN: number;
+  campaignId: string; churches: ChurchOption[]; data: MonitorData; church: string; search: string; topN: number; frozen: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -69,7 +69,7 @@ export function MonitorClient({
             <h2 className="font-semibold text-text-primary">{topN} besar semua gereja</h2>
             <p className="text-xs text-text-secondary">Menampilkan poin terkini, juga setelah dibekukan.</p>
           </div>
-          <Badge variant={data.top[0]?.frozen ? 'primary' : 'outline'}>{data.top[0]?.frozen ? 'Dibekukan' : 'Sementara'}</Badge>
+          <Badge variant={frozen ? 'primary' : 'outline'}>{frozen ? 'Dibekukan' : 'Sementara'}</Badge>
         </div>
         <table className="w-full text-sm">
           <thead className="text-left text-text-secondary">
@@ -93,7 +93,7 @@ export function MonitorClient({
                   <div className="text-text-primary">{t.full_name}</div>
                   <div className="text-xs text-text-secondary">di layar: {t.display_name}</div>
                 </td>
-                <td className="px-4 py-3 text-text-secondary">{t.church_name}</td>
+                <td className="px-4 py-3 text-text-secondary">{t.church_name ?? '—'}</td>
                 <td className="px-4 py-3">{t.points}</td>
                 <td className="px-4 py-3 text-text-secondary">{t.phone ?? '—'}</td>
                 <td className="px-4 py-3 text-text-secondary">{t.frozen ? 'Dibekukan' : 'Sementara'}</td>

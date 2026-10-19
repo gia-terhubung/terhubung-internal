@@ -20,6 +20,6 @@ export default async function MonitorPage({
   const data = await getMonitor(id, { church, search, page: requestedPage });
   return (
     <MonitorClient campaignId={id} churches={detail.churches} data={data} church={church} search={search}
-      topN={detail.campaign.rules.grand_top_n} />
+      topN={detail.campaign.rules.grand_top_n} frozen={detail.campaign.frozen_at !== null} />
   );
 }

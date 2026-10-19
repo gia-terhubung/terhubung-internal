@@ -8,7 +8,7 @@ import type {
   AdminStatsRow, AdminTopRow, AdminWinnerRow, CampaignDetail, CampaignInput, CampaignListItem, CampaignRow, ChurchOption, MonitorData, ParticipantRow, PrizeRow, QuestionCategory, QuestionRow, SlotRow,
 } from '@/types/campaign.types';
 
-export const CAMPAIGN_COLS =
+const CAMPAIGN_COLS =
   'id, name, status, is_test, sim_now, start_at, close_at, draw_at, frozen_at, theme, venue, modules, rules, created_at, updated_at';
 
 function campaignDb() {
@@ -88,6 +88,7 @@ export const getCampaignDetail = cache(async (id: string): Promise<CampaignDetai
       close: campaign.frozen_at !== null,
       draw: hasWinners,
       isTest: campaign.status !== 'draft',
+      topN: campaign.frozen_at !== null,
     },
   };
 });

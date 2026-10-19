@@ -74,7 +74,7 @@ export function WinnersClient({
                     <div className="text-text-primary">{t.full_name}</div>
                     <div className="text-xs text-text-secondary">di layar: {t.display_name}</div>
                   </td>
-                  <td className="px-4 py-3 text-text-secondary">{t.church_name}</td>
+                  <td className="px-4 py-3 text-text-secondary">{t.church_name ?? '—'}</td>
                   <td className="px-4 py-3">{t.points}</td>
                   <td className="px-4 py-3 text-text-secondary">{t.phone ?? '—'}</td>
                 </tr>

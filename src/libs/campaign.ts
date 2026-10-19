@@ -204,11 +204,6 @@ export function formatDay(day: string): string {
   });
 }
 
-/** Campaign clock day (sim_now on test campaigns), like campaign.now_for(). */
-export function campaignToday(c: CampaignRow): string {
-  return wibDate(c.is_test && c.sim_now ? c.sim_now : new Date().toISOString());
-}
-
 // ---------- lifecycle ----------
 
 export function computeStatus(c: CampaignRow, hasWinners: boolean, nowMs: number): CampaignStatus {
@@ -481,8 +476,8 @@ export function toCsv(rows: (string | number | null)[][]): string {
   const cell = (v: string | number | null) => {
     let s = v === null ? '' : String(v);
     // CSV formula injection guard: a string starting with = + - @ tab or CR gets a leading '.
-    // Side effect (accepted): phone numbers like +62812... keep their '+' in Excel, shown with the '.
-    if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    // Exception: a phone number (+ then digits/spaces/hyphens only) stays as is so Excel shows +62...
+    if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s) && !/^\+\d[\d\s-]*$/.test(s)) s = "'" + s;
     return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   return rows.map((r) => r.map(cell).join(',') + '\r\n').join('');

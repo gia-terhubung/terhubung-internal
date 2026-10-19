@@ -76,6 +76,7 @@ export interface CampaignLocks {
   close: boolean;
   draw: boolean;
   isTest: boolean;
+  topN: boolean; // rules.grand_top_n locked once participants are frozen
 }
 
 export interface ChurchOption {
@@ -209,7 +210,7 @@ export interface AdminTopRow {
   user_id: string;
   full_name: string;
   display_name: string;
-  church_name: string;
+  church_name: string | null;
   points: number;
   phone: string | null;
   frozen: boolean;
