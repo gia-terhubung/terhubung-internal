@@ -3,10 +3,10 @@
 import { revalidatePath } from 'next/cache';
 import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
-import { DEFAULT_RULES, addDays, campaignAssetPrefix, diffDays, isUuid, sanitizeCampaignInput, validateCampaignInput, wibDate } from '@/libs/campaign';
+import { DEFAULT_RULES, addDays, campaignAssetPrefix, diffDays, isUuid, sanitizeAssetUrl, sanitizeCampaignInput, validateCampaignInput, wibDate } from '@/libs/campaign';
 import type { ActionResult } from '@/types/internal.types';
 import { orIlike } from '@/libs/pagination';
-import type { ActionResultWith, CampaignInput, CampaignRow, ChurchOption } from '@/types/campaign.types';
+import type { ActionResultWith, CampaignInput, CampaignRow, ChurchOption, PrizeInput } from '@/types/campaign.types';
 
 const COLS =
   'id, name, status, is_test, sim_now, start_at, close_at, draw_at, frozen_at, theme, venue, modules, rules, created_at, updated_at';
@@ -348,4 +348,88 @@ async function setCampaignChurches(id: string, churchIds: string[], expectedChur
   revalidatePath('/campaigns');
   revalidatePath('/campaigns/[id]', 'layout');
   return { ok: true };
+}
+
+const PRIZE_TYPES = ['grand', 'normal', 'top'];
+const WINNERS_BLOCK_DELETE = 'Hadiah sudah punya pemenang, tidak bisa dihapus.';
+
+async function prizeWinnerCount(prizeId: string): Promise<number> {
+  const { count, error } = await campaignDb().from('winners').select('id', { count: 'exact', head: true }).eq('prize_id', prizeId);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+// Quantity is editable at any time (also after freeze / on draw night). The only
+// floor is this prize's current winner count.
+export async function savePrizeAction(campaignId: string, input: PrizeInput): Promise<ActionResult> {
+  await requireInternalAdmin();
+  try {
+    return await savePrize(campaignId, input);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Gagal menyimpan hadiah.' };
+  }
+}
+
+async function savePrize(campaignId: string, input: PrizeInput): Promise<ActionResult> {
+  if (!input || typeof input !== 'object') return { ok: false, error: 'Data hadiah tidak valid.' };
+  if (typeof input.name !== 'string') return { ok: false, error: 'Nama hadiah harus 2–120 karakter.' };
+  const name = input.name.trim();
+  if (name.length < 2 || name.length > 120) return { ok: false, error: 'Nama hadiah harus 2–120 karakter.' };
+  if (!PRIZE_TYPES.includes(input.prize_type)) return { ok: false, error: 'Jenis hadiah tidak dikenal.' };
+  if (!Number.isInteger(input.quantity) || input.quantity < 1 || input.quantity > 1000) {
+    return { ok: false, error: 'Jumlah hadiah harus 1–1000.' };
+  }
+  if (!Number.isInteger(input.sort_order) || Math.abs(input.sort_order) > 100000) {
+    return { ok: false, error: 'Urutan harus angka bulat.' };
+  }
+  if (input.id !== undefined && (typeof input.id !== 'string' || !isUuid(input.id))) {
+    return { ok: false, error: 'Hadiah tidak ditemukan.' };
+  }
+  if (!(await loadCampaign(campaignId))) return { ok: false, error: 'Campaign tidak ditemukan.' };
+
+  const db = campaignDb();
+  const row = {
+    prize_type: input.prize_type,
+    name,
+    image_url: sanitizeAssetUrl(input.image_url, campaignAssetPrefix(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '')),
+    quantity: input.quantity,
+    sort_order: input.sort_order,
+  };
+
+  if (input.id) {
+    const { data: cur, error: cErr } = await db
+      .from('prizes').select('prize_type').eq('id', input.id).eq('campaign_id', campaignId).maybeSingle();
+    if (cErr) return { ok: false, error: cErr.message };
+    if (!cur) return { ok: false, error: 'Hadiah tidak ditemukan.' };
+    const winners = await prizeWinnerCount(input.id);
+    if (winners > 0 && (cur as { prize_type: string }).prize_type !== input.prize_type) {
+      return { ok: false, error: 'Jenis hadiah tidak bisa diubah setelah ada pemenang.' };
+    }
+    if (input.quantity < winners) {
+      return { ok: false, error: `Jumlah tidak boleh kurang dari pemenang yang sudah diundi (${winners}).` };
+    }
+    const { error } = await db.from('prizes').update(row).eq('id', input.id).eq('campaign_id', campaignId);
+    if (error) return { ok: false, error: error.message };
+  } else {
+    const { error } = await db.from('prizes').insert({ ...row, campaign_id: campaignId });
+    if (error) return { ok: false, error: error.message };
+  }
+
+  revalidatePath('/campaigns/[id]', 'layout');
+  return { ok: true };
+}
+
+export async function deletePrizeAction(campaignId: string, prizeId: string): Promise<ActionResult> {
+  await requireInternalAdmin();
+  try {
+    if (!isUuid(campaignId) || !isUuid(prizeId)) return { ok: false, error: 'Hadiah tidak ditemukan.' };
+    if ((await prizeWinnerCount(prizeId)) > 0) return { ok: false, error: WINNERS_BLOCK_DELETE };
+    const { error } = await campaignDb().from('prizes').delete().eq('id', prizeId).eq('campaign_id', campaignId);
+    // 23503 = winners.prize_id FK (ON DELETE RESTRICT): a winner was drawn between the check and the delete.
+    if (error) return { ok: false, error: error.code === '23503' ? WINNERS_BLOCK_DELETE : error.message };
+    revalidatePath('/campaigns/[id]', 'layout');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Gagal menghapus hadiah.' };
+  }
 }

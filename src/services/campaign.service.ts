@@ -4,7 +4,7 @@ import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
 import { computeStatus, defaultCampaignInput, isUuid } from '@/libs/campaign';
 import type {
-  CampaignDetail, CampaignInput, CampaignListItem, CampaignRow, ChurchOption,
+  CampaignDetail, CampaignInput, CampaignListItem, CampaignRow, ChurchOption, PrizeRow,
 } from '@/types/campaign.types';
 
 export const CAMPAIGN_COLS =
@@ -94,4 +94,20 @@ export const getCampaignDetail = cache(async (id: string): Promise<CampaignDetai
 export async function getNewCampaignDefaults(): Promise<CampaignInput> {
   await requireInternalAdmin();
   return defaultCampaignInput(Date.now());
+}
+
+export async function listPrizes(campaignId: string): Promise<PrizeRow[]> {
+  await requireInternalAdmin();
+  if (!isUuid(campaignId)) return [];
+  const db = campaignDb();
+  const [pRes, wRes] = await Promise.all([
+    db.from('prizes').select('id, campaign_id, prize_type, name, image_url, quantity, sort_order')
+      .eq('campaign_id', campaignId).order('sort_order'),
+    db.from('winners').select('prize_id').eq('campaign_id', campaignId),
+  ]);
+  if (pRes.error) throw new Error(pRes.error.message);
+  if (wRes.error) throw new Error(wRes.error.message);
+  const won = new Map<string, number>();
+  for (const w of (wRes.data ?? []) as { prize_id: string }[]) won.set(w.prize_id, (won.get(w.prize_id) ?? 0) + 1);
+  return ((pRes.data ?? []) as Omit<PrizeRow, 'winner_count'>[]).map((p) => ({ ...p, winner_count: won.get(p.id) ?? 0 }));
 }
