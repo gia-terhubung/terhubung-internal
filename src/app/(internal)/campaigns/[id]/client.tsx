@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ConfirmDialog } from '@/components/molecules/ConfirmDialog.molecule';
 import { CampaignSettingsForm } from '@/components/organisms/CampaignSettingsForm.organism';
 import { ChurchMultiSelect } from '@/components/organisms/ChurchMultiSelect.organism';
+import { TestToolsPanel } from '@/components/organisms/TestToolsPanel.organism';
 import { DuplicateCampaignModal } from '@/components/organisms/DuplicateCampaignModal.organism';
 import { setCampaignStatusAction } from '@/services/campaign.actions';
 import { toCampaignInput } from '@/libs/campaign';
@@ -76,6 +77,8 @@ export function CampaignSettingsClient({ detail }: { detail: CampaignDetail }) {
       />
 
       <ChurchMultiSelect campaignId={c.id} initial={detail.churches} />
+
+      {c.is_test && <TestToolsPanel key={c.updated_at} campaign={c} />}
 
       {pending && (
         <ConfirmDialog

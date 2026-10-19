@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
-import { DEFAULT_RULES, addDays, campaignAssetPrefix, diffDays, isUuid, sanitizeAssetUrl, sanitizeCampaignInput, validateCampaignInput, wibDate } from '@/libs/campaign';
+import { DEFAULT_RULES, addDays, campaignAssetPrefix, diffDays, isUuid, rpcErrorMessage, sanitizeAssetUrl, sanitizeCampaignInput, validateCampaignInput, wibDate } from '@/libs/campaign';
 import type { ActionResult } from '@/types/internal.types';
 import { orIlike } from '@/libs/pagination';
 import type { ActionResultWith, CampaignInput, CampaignRow, ChurchOption, PrizeInput } from '@/types/campaign.types';
@@ -431,5 +431,57 @@ export async function deletePrizeAction(campaignId: string, prizeId: string): Pr
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Gagal menghapus hadiah.' };
+  }
+}
+
+export async function setSimNowAction(id: string, iso: string | null): Promise<ActionResult> {
+  await requireInternalAdmin();
+  try {
+    if (!isUuid(id)) return { ok: false, error: 'Campaign tidak ditemukan.' };
+    const cur = await loadCampaign(id);
+    if (!cur) return { ok: false, error: 'Campaign tidak ditemukan.' };
+    if (!cur.is_test) return { ok: false, error: 'Waktu simulasi hanya untuk campaign uji coba.' };
+    if (iso !== null && (typeof iso !== 'string' || Number.isNaN(Date.parse(iso)))) {
+      return { ok: false, error: 'Waktu simulasi tidak valid.' };
+    }
+    const { error } = await campaignDb().from('campaigns').update({ sim_now: iso, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath('/campaigns/[id]', 'layout');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Gagal menyimpan waktu simulasi.' };
+  }
+}
+
+export async function seedDummyAction(id: string, count: number): Promise<ActionResultWith<{ seeded: number }>> {
+  await requireInternalAdmin();
+  try {
+    if (!isUuid(id)) return { ok: false, error: 'Campaign tidak ditemukan.' };
+    if (!Number.isInteger(count) || count < 1 || count > 5000) return { ok: false, error: 'Jumlah peserta dummy 1–5000.' };
+    const cur = await loadCampaign(id);
+    if (!cur) return { ok: false, error: 'Campaign tidak ditemukan.' };
+    if (!cur.is_test) return { ok: false, error: rpcErrorMessage('not_test') };
+    const { data, error } = await campaignDb().rpc('seed_dummy', { p_campaign: id, p_count: count });
+    if (error) return { ok: false, error: rpcErrorMessage(error.message) };
+    revalidatePath('/campaigns/[id]', 'layout');
+    return { ok: true, data: { seeded: Number(data) } };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Gagal membuat data dummy.' };
+  }
+}
+
+export async function resetTestAction(id: string): Promise<ActionResult> {
+  await requireInternalAdmin();
+  try {
+    if (!isUuid(id)) return { ok: false, error: 'Campaign tidak ditemukan.' };
+    const cur = await loadCampaign(id);
+    if (!cur) return { ok: false, error: 'Campaign tidak ditemukan.' };
+    if (!cur.is_test) return { ok: false, error: rpcErrorMessage('not_test') };
+    const { error } = await campaignDb().rpc('reset_test', { p_campaign: id });
+    if (error) return { ok: false, error: rpcErrorMessage(error.message) };
+    revalidatePath('/campaigns/[id]', 'layout');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Gagal mereset data.' };
   }
 }

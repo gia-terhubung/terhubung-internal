@@ -5,7 +5,7 @@ import { createAdminClient } from '@/libs/supabase/admin';
 import { computeStatus, defaultCampaignInput, isUuid } from '@/libs/campaign';
 import { PAGE_SIZE, clampPage, escapeLike, pageRange, type Paged } from '@/libs/pagination';
 import type {
-  AdminStatsRow, AdminTopRow, CampaignDetail, CampaignInput, CampaignListItem, CampaignRow, ChurchOption, MonitorData, ParticipantRow, PrizeRow, QuestionCategory, QuestionRow, SlotRow,
+  AdminStatsRow, AdminTopRow, AdminWinnerRow, CampaignDetail, CampaignInput, CampaignListItem, CampaignRow, ChurchOption, MonitorData, ParticipantRow, PrizeRow, QuestionCategory, QuestionRow, SlotRow,
 } from '@/types/campaign.types';
 
 export const CAMPAIGN_COLS =
@@ -261,4 +261,12 @@ export async function getMonitor(
     page,
     top,
   };
+}
+
+export async function getWinners(campaignId: string): Promise<AdminWinnerRow[]> {
+  await requireInternalAdmin();
+  if (!isUuid(campaignId)) return [];
+  const { data, error } = await campaignDb().rpc('admin_winners', { p_campaign: campaignId });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as AdminWinnerRow[];
 }
