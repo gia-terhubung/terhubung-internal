@@ -395,7 +395,7 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
       {confirmDrawAll && (
         <ConfirmDialog
           title="Undi semua hadiah?"
-          message={`${formatCount(units.length)} hadiah yang tersisa diundi sekarang, satu per satu. Jangan tutup halaman ini sampai selesai.`}
+          message={`${formatCount(units.length)} hadiah yang tersisa diundi sekarang, satu per satu. Jangan tutup halaman ini sampai selesai.${announce && !prePublish ? ' Pemenang langsung tampil di aplikasi dan menerima notifikasi.' : ''}`}
           confirmLabel="Undi semua"
           onConfirm={drawAll}
           onClose={() => setConfirmDrawAll(false)}
