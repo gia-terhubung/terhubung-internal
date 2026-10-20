@@ -6,13 +6,14 @@ import { Badge } from '@/components/atoms/Badge.atom';
 import { SearchInput } from '@/components/atoms/SearchInput.atom';
 import { Pagination } from '@/components/molecules/Pagination.molecule';
 import { AdjustPointsModal } from '@/components/organisms/AdjustPointsModal.organism';
+import { DrawExclusionsPanel } from '@/components/organisms/DrawExclusionsPanel.organism';
 import { PAGE_SIZE } from '@/libs/pagination';
-import type { ChurchOption, MonitorData, ParticipantRow } from '@/types/campaign.types';
+import type { ChurchOption, DrawExclusionRow, MonitorData, ParticipantRow } from '@/types/campaign.types';
 
 export function MonitorClient({
-  campaignId, churches, data, church, search, topN, frozen,
+  campaignId, churches, data, church, search, topN, frozen, exclusions,
 }: {
-  campaignId: string; churches: ChurchOption[]; data: MonitorData; church: string; search: string; topN: number; frozen: boolean;
+  campaignId: string; churches: ChurchOption[]; data: MonitorData; church: string; search: string; topN: number; frozen: boolean; exclusions: DrawExclusionRow[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -102,6 +103,8 @@ export function MonitorClient({
           </tbody>
         </table>
       </section>
+
+      <DrawExclusionsPanel campaignId={campaignId} exclusions={exclusions} frozen={frozen} />
 
       <div className="overflow-hidden rounded-xl border border-border-color">
         <table className="w-full text-sm">

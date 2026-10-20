@@ -509,6 +509,11 @@ const RPC_ERRORS: Record<string, string> = {
   // Plan 1 edit-block triggers (the app also pre-checks for UX).
   question_in_use: 'Pertanyaan sudah dijawab peserta, tidak bisa diubah. Arsipkan dan buat yang baru.',
   slot_locked: 'Jadwal ini sudah dijawab peserta, tidak bisa diganti.',
+  // Plan 4 Task 5: draw opt-out. 'frozen' must stay after 'not_frozen' (rpcErrorMessage's substring
+  // fallback takes the first key found in the message).
+  already_won: 'Orang ini sudah menang undian. Kemenangannya tetap; pengecualian tidak bisa ditambahkan.',
+  already_excluded: 'Orang ini sudah dikecualikan dari undian.',
+  frozen: 'Peserta sudah dibekukan. Pengecualian tidak bisa dihapus lagi.',
 };
 
 /** Maps a plan 1 error code (exact, or embedded in the PostgREST message) to copy. */

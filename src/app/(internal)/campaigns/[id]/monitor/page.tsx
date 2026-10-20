@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getCampaignDetail, getMonitor } from '@/services/campaign.service';
+import { getCampaignDetail, getMonitor, listDrawExclusions } from '@/services/campaign.service';
 import { MonitorClient } from './client';
 
 export default async function MonitorPage({
@@ -17,9 +17,13 @@ export default async function MonitorPage({
 
   const detail = await getCampaignDetail(id);
   if (!detail) notFound();
-  const data = await getMonitor(id, { church, search, page: requestedPage });
+  const [data, exclusions] = await Promise.all([
+    getMonitor(id, { church, search, page: requestedPage }),
+    listDrawExclusions(id),
+  ]);
   return (
     <MonitorClient campaignId={id} churches={detail.churches} data={data} church={church} search={search}
-      topN={detail.campaign.rules.grand_top_n} frozen={detail.campaign.frozen_at !== null} />
+      topN={detail.campaign.rules.grand_top_n} frozen={detail.campaign.frozen_at !== null}
+      exclusions={exclusions} />
   );
 }

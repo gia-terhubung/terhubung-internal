@@ -92,6 +92,11 @@ assert.match(rpcErrorMessage('prize_not_drawable'), /tidak diundi/);
 assert.equal(rpcErrorMessage('not_frozen'), 'Peserta belum dibekukan. Klik "Bekukan peserta" dulu.');
 assert.equal(rpcErrorMessage('prize_exhausted'), 'Semua unit hadiah ini sudah diundi.');
 assert.equal(rpcErrorMessage('pool_empty'), 'Peserta untuk jenis hadiah ini sudah habis.');
+// L10b draw opt-out codes (plan 4 Task 5); 'not_frozen' must not be shadowed by 'frozen'
+assert.match(rpcErrorMessage('already_won'), /sudah menang/);
+assert.match(rpcErrorMessage('already_excluded'), /sudah dikecualikan/);
+assert.match(rpcErrorMessage('frozen'), /sudah dibekukan/);
+assert.equal(rpcErrorMessage('not_frozen'), 'Peserta belum dibekukan. Klik "Bekukan peserta" dulu.');
 
 // L11 hardening helpers
 assert.ok(isUuid('123e4567-e89b-12d3-a456-426614174000'));

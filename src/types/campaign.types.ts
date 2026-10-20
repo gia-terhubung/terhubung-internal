@@ -239,3 +239,24 @@ export interface AdminWinnerRow {
 }
 
 export type ActionResultWith<T> = { ok: true; data: T } | { ok: false; error: string };
+
+// campaign.admin_draw_exclusions row (plan 4 Task 5). Exactly one of user_id / person_id is set.
+export interface DrawExclusionRow {
+  id: string;
+  user_id: string | null;
+  person_id: string | null; // non-app member
+  full_name: string;
+  church_name: string | null; // null if an app user left every participating church
+  note: string;
+  created_at: string;
+}
+
+// campaign.search_draw_candidates row: user_id for app users, person_id for non-app members.
+export interface DrawCandidateRow {
+  user_id: string | null;
+  person_id: string | null;
+  full_name: string;
+  church_name: string;
+  has_app: boolean;
+  excluded: boolean;
+}
