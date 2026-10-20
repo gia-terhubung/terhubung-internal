@@ -233,6 +233,12 @@ export function formatDay(day: string): string {
 
 // ---------- lifecycle ----------
 
+/** Badge text. Announce mode shows "Menunggu pengumuman" while winners are drawn but not yet published. */
+export function statusLabel(c: CampaignRow, status: CampaignStatus, nowMs: number): string {
+  if (status === 'drawn' && isPrePublish({ ...c, draw_mode: drawModeOf(c.rules) }, nowMs)) return 'Menunggu pengumuman';
+  return STATUS_LABEL[status];
+}
+
 export function computeStatus(c: CampaignRow, hasWinners: boolean, nowMs: number): CampaignStatus {
   if (c.status === 'archived') return 'archived';
   if (c.status === 'draft') return 'draft';

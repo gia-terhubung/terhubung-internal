@@ -1,6 +1,5 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
 import { isUuid, rpcErrorMessage } from '@/libs/campaign';
@@ -47,8 +46,7 @@ export async function adjustPointsAction(input: {
       p_operator: user.id,
     });
     if (error) return { ok: false, error: rpcErrorMessage(error.message) };
-    revalidatePath('/campaigns/[id]', 'layout');
-    return { ok: true };
+      return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Gagal menyimpan penyesuaian.' };
   }
@@ -68,8 +66,7 @@ export async function revokeEventAction(input: { campaignId: string; eventId: nu
     if (!ev) return { ok: false, error: 'Poin tidak ditemukan di campaign ini.' };
     const { error } = await campaignDb().rpc('revoke_event', { p_event_id: input.eventId, p_note: note, p_operator: user.id });
     if (error) return { ok: false, error: rpcErrorMessage(error.message) };
-    revalidatePath('/campaigns/[id]', 'layout');
-    return { ok: true };
+      return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Gagal membatalkan poin.' };
   }
@@ -107,8 +104,7 @@ export async function addDrawExclusionAction(input: {
       p_operator: user.id,
     });
     if (error) return { ok: false, error: rpcErrorMessage(error.message) };
-    revalidatePath('/campaigns/[id]', 'layout');
-    return { ok: true };
+      return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Gagal menyimpan pengecualian.' };
   }
@@ -125,8 +121,7 @@ export async function removeDrawExclusionAction(input: { campaignId: string; exc
     if (!ex) return { ok: false, error: rpcErrorMessage('not_found') };
     const { error } = await campaignDb().rpc('remove_draw_exclusion', { p_exclusion_id: input.exclusionId });
     if (error) return { ok: false, error: rpcErrorMessage(error.message) };
-    revalidatePath('/campaigns/[id]', 'layout');
-    return { ok: true };
+      return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Gagal menghapus pengecualian.' };
   }

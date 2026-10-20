@@ -72,6 +72,7 @@ export interface CampaignListItem extends CampaignRow {
   church_count: number;
   has_winners: boolean;
   computed_status: CampaignStatus;
+  status_label: string;
 }
 
 // Which date fields the server will refuse to change (mirrors updateCampaignAction).
@@ -97,6 +98,7 @@ export interface CampaignDetail {
   weekly_weeks: number[]; // distinct week_no that have weekly slots (any range)
   daily_dates: string[]; // for_date of every daily slot (any range)
   status: CampaignStatus;
+  status_label: string;
   locks: CampaignLocks;
 }
 

@@ -2,7 +2,7 @@ import 'server-only';
 import { cache } from 'react';
 import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
-import { computeStatus, defaultCampaignInput, drawAtLocked, drawModeOf, isUuid } from '@/libs/campaign';
+import { computeStatus, defaultCampaignInput, drawAtLocked, drawModeOf, isUuid, statusLabel } from '@/libs/campaign';
 import { PAGE_SIZE, clampPage, escapeLike, pageRange, type Paged } from '@/libs/pagination';
 import type {
   AdminStatsRow, AdminTopRow, AdminWinnerRow, CampaignDetail, CampaignInput, CampaignListItem, CampaignRow, ChurchOption, DrawExclusionRow, MonitorData, WinnerRemovalRow, ParticipantRow, PrizeRow, QuestionCategory, QuestionRow, SlotRow,
@@ -39,6 +39,7 @@ export async function listCampaigns(): Promise<CampaignListItem[]> {
     church_count: churchCount.get(c.id) ?? 0,
     has_winners: drawn.has(c.id),
     computed_status: computeStatus(c, drawn.has(c.id), now),
+    status_label: statusLabel(c, computeStatus(c, drawn.has(c.id), now), now),
   }));
 }
 
@@ -82,6 +83,7 @@ export const getCampaignDetail = cache(async (id: string): Promise<CampaignDetai
     daily_dates: ((wkRes.data ?? []) as { kind: string; for_date: string | null }[])
       .filter((r) => r.kind === 'daily' && r.for_date !== null).map((r) => r.for_date as string),
     status: computeStatus(campaign, hasWinners, now),
+    status_label: statusLabel(campaign, computeStatus(campaign, hasWinners, now), now),
     // Same rules updateCampaignAction enforces server-side.
     locks: {
       start: !campaign.is_test && now >= Date.parse(campaign.start_at),

@@ -7,7 +7,7 @@ import {
   campaignDays, computeStatus, isoToWibInput, parseCsv, parseQuestionCsv, rpcErrorMessage,
   countableWeeks, lastDay, resolveRequirements, toCsv, totalDays, validateCampaignInput, weekNo, weekRange, wibDate,
   wibInputToIso, isUuid, campaignAssetPrefix, sanitizeAssetUrl, sanitizeCampaignInput, slotOutOfPeriod,
-  drawModeOf, isPrePublish, drawAtLocked,
+  drawModeOf, isPrePublish, drawAtLocked, statusLabel,
 } from '../src/libs/campaign.ts';
 
 // L1 WIB day: 2026-11-01 17:30 UTC = 2026-11-02 00:30 WIB
@@ -80,6 +80,15 @@ assert.equal(computeStatus(base, false, Date.parse('2026-11-10T00:00:00Z')), 'ru
 assert.equal(computeStatus(base, false, Date.parse('2026-12-31T11:30:00Z')), 'closed');
 assert.equal(computeStatus(base, true, Date.parse('2026-12-31T12:30:00Z')), 'drawn');
 assert.equal(computeStatus({ ...base, status: 'draft' }, false, Date.now()), 'draft');
+// L8b announce-mode label: waiting for announcement only while pre-publish
+const ann = { ...base, rules: { ...DEFAULT_RULES, draw_mode: 'announce' as const } };
+const beforeDraw = Date.parse('2026-12-31T11:30:00Z');
+const afterDraw = Date.parse('2026-12-31T12:30:00Z');
+assert.equal(statusLabel(ann, 'drawn', beforeDraw), 'Menunggu pengumuman');
+assert.equal(statusLabel(ann, 'drawn', afterDraw), 'Selesai diundi');
+assert.equal(statusLabel({ ...ann, announced_at: '2026-12-31T12:00:00Z' }, 'drawn', beforeDraw), 'Selesai diundi');
+assert.equal(statusLabel(base, 'drawn', beforeDraw), 'Selesai diundi');
+assert.equal(statusLabel(ann, 'closed', beforeDraw), 'Ditutup');
 // L9 validation
 const input = { name: 'Natal', start_at: start, close_at: base.close_at, draw_at: base.draw_at, is_test: false,
   theme: DEFAULT_THEME, venue: DEFAULT_VENUE, modules: DEFAULT_MODULES, rules: DEFAULT_RULES };

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Badge } from '@/components/atoms/Badge.atom';
 import { DuplicateCampaignModal } from '@/components/organisms/DuplicateCampaignModal.organism';
-import { STATUS_LABEL, STATUS_VARIANT, formatWib } from '@/libs/campaign';
+import { STATUS_VARIANT, formatWib } from '@/libs/campaign';
 import type { CampaignListItem } from '@/types/campaign.types';
 
 export function CampaignsClient({ campaigns }: { campaigns: CampaignListItem[] }) {
@@ -51,7 +51,7 @@ export function CampaignsClient({ campaigns }: { campaigns: CampaignListItem[] }
                     <Link href={`/campaigns/${c.id}`} className="font-medium text-text-primary hover:text-brand">{c.name}</Link>
                     {c.is_test && <span className="ml-2"><Badge variant="warning">Uji coba</Badge></span>}
                   </td>
-                  <td className="px-4 py-3"><Badge variant={STATUS_VARIANT[c.computed_status]}>{STATUS_LABEL[c.computed_status]}</Badge></td>
+                  <td className="px-4 py-3"><Badge variant={STATUS_VARIANT[c.computed_status]}>{c.status_label}</Badge></td>
                   <td className="px-4 py-3 text-text-secondary">{formatWib(c.start_at)}</td>
                   <td className="px-4 py-3 text-text-secondary">{formatWib(c.draw_at)}</td>
                   <td className="px-4 py-3 text-text-secondary">{c.church_count}</td>

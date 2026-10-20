@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { Badge } from '@/components/atoms/Badge.atom';
 import { TabNav } from '@/components/molecules/TabNav.molecule';
 import { getCampaignDetail } from '@/services/campaign.service';
-import { STATUS_LABEL, STATUS_VARIANT, drawModeOf, formatWib } from '@/libs/campaign';
+import { STATUS_VARIANT, drawModeOf, formatWib } from '@/libs/campaign';
 
 export default async function CampaignLayout({
   children,
@@ -25,7 +25,7 @@ export default async function CampaignLayout({
         <Link href="/campaigns" className="text-sm text-text-secondary hover:text-text-primary">← Semua campaign</Link>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-bold text-text-primary">{c.name}</h1>
-          <Badge variant={STATUS_VARIANT[detail.status]}>{STATUS_LABEL[detail.status]}</Badge>
+          <Badge variant={STATUS_VARIANT[detail.status]}>{detail.status_label}</Badge>
           {c.is_test && <Badge variant="warning">Uji coba</Badge>}
         </div>
         <p className="mt-1 text-sm text-text-secondary">

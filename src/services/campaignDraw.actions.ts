@@ -1,6 +1,5 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
 import { isUuid, rpcErrorMessage } from '@/libs/campaign';
@@ -24,7 +23,6 @@ export async function freezePoolAction(campaignId: string): Promise<FreezeResult
     .rpc('freeze_pool', { p_campaign: campaignId });
   if (error) return { ok: false, error: rpcErrorMessage(error.message) };
 
-  revalidatePath('/campaigns/[id]', 'layout');
   const counts = data as { normal: number; grand: number };
   return { ok: true, normal: counts.normal, grand: counts.grand };
 }
@@ -45,7 +43,6 @@ export async function drawNextAction(campaignId: string, prizeId: string): Promi
   const { data, error } = await db.rpc('draw_next', { p_prize_id: prizeId, p_operator: user.id });
   if (error) return { ok: false, error: rpcErrorMessage(error.message) };
 
-  revalidatePath('/campaigns/[id]', 'layout');
   // user_id is NULL (person_id set) for a non-app winner; neither is read here.
   const w = data as DrawWinner & { user_id: string | null; person_id: string | null };
   return {
@@ -90,7 +87,6 @@ export async function redrawWinnerAction(
   });
   if (error) return { ok: false, error: rpcErrorMessage(error.message) };
 
-  revalidatePath('/campaigns/[id]', 'layout');
   const r = data as { removed: unknown[]; replacements: unknown[]; pool_empty: unknown[] };
   return { ok: true, replaced: r.replacements?.length ?? 0, poolEmpty: r.pool_empty?.length ?? 0 };
 }

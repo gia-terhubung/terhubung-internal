@@ -185,7 +185,7 @@ export function CampaignSettingsForm({
             disabled={locks.close} lockedHint="Terkunci: peserta sudah dibekukan."
             helper={formLastDay ? `Hari terakhir check-in: ${formatLongDay(formLastDay)}` : undefined} />
           <DateTimeField label={announce ? 'Waktu pengumuman' : 'Undian live'} value={form.draw_at} onChange={(v) => patch({ draw_at: v })}
-            disabled={locks.draw} lockedHint="Terkunci: pengundian sudah dimulai." />
+            disabled={locks.draw} lockedHint={announce ? 'Terkunci: pemenang sudah diumumkan.' : 'Terkunci: pengundian sudah dimulai.'} />
         </div>
         {(orphanDaily > 0 || orphanWeeks > 0) && (
           <p className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-text-primary">
