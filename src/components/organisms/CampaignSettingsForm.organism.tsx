@@ -197,7 +197,7 @@ export function CampaignSettingsForm({
         )}
       </Section>
 
-      <Section title="Tema" hint="Warna dan judul dipakai di banner beranda, halaman campaign di aplikasi, dan layar undian. Gambar utama tampil di halaman campaign aplikasi dan layar undian; gambar banner dipakai di layar undian.">
+      <Section title="Tema" hint="Judul dan warna dipakai di banner beranda, halaman campaign di aplikasi, dan layar undian. Subjudul dan ayat tampil di halaman campaign aplikasi dan layar undian (ayat juga di layar persetujuan). Gambar banner menjadi latar banner beranda aplikasi. Gambar utama tampil di atas halaman campaign aplikasi. Layar undian tidak menampilkan gambar tema.">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="block">
             <span className={labelCls}>Judul</span>
