@@ -8,6 +8,7 @@ import {
   countableWeeks, lastDay, resolveRequirements, toCsv, totalDays, validateCampaignInput, weekNo, weekRange, wibDate,
   wibInputToIso, isUuid, campaignAssetPrefix, sanitizeAssetUrl, sanitizeCampaignInput, slotOutOfPeriod,
   drawModeOf, isPrePublish, drawAtLocked, statusLabel,
+  assetObjectPath, droppedAssetUrls, unreferencedPaths,
 } from '../src/libs/campaign.ts';
 
 // L1 WIB day: 2026-11-01 17:30 UTC = 2026-11-02 00:30 WIB
@@ -183,5 +184,22 @@ assert.notEqual(validateCampaignInput({ ...input, rules: { ...DEFAULT_RULES, dra
 assert.equal(rpcErrorMessage('already_published'), 'Pemenang sudah diumumkan. Undi ulang tidak bisa lagi.');
 assert.equal(rpcErrorMessage('invalid_reason'), 'Pilih alasan undi ulang.');
 assert.equal(rpcErrorMessage('not_announce_mode'), 'Undi ulang hanya untuk campaign mode pengumuman.');
+
+{
+  const P = campaignAssetPrefix('https://x.supabase.co')!;
+  assert.equal(assetObjectPath(`${P}c1/banner-a.jpg`, P), 'c1/banner-a.jpg');
+  assert.equal(assetObjectPath(`${P}c1/banner-a.jpg?t=1`, P), 'c1/banner-a.jpg');
+  assert.equal(assetObjectPath(P, P), null);
+  assert.equal(assetObjectPath('https://x.supabase.co/storage/v1/object/public/avatars/a.jpg', P), null);
+  assert.equal(assetObjectPath(`${P}c1/../avatars/a.jpg`, P), null);
+  assert.equal(assetObjectPath(`${P}c1/a.jpg`, null), null);
+  assert.deepEqual(droppedAssetUrls(['a', 'b', null, 'a'], ['b', null]), ['a']);
+  assert.deepEqual(droppedAssetUrls([null, ''], []), []);
+  assert.deepEqual(
+    unreferencedPaths(['c1/a.jpg', 'c1/b.jpg', 'c2/a.jpg'], [`${P}c1/a.jpg`, null, `${P}c2/a.jpg`], P),
+    ['c1/b.jpg'],
+  );
+  assert.deepEqual(unreferencedPaths(['c1/a.jpg'], [], null), []);
+}
 
 console.log('check-campaign-lib: all assertions passed');

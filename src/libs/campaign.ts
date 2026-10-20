@@ -347,6 +347,34 @@ export function sanitizeAssetUrl(v: unknown, prefix: string | null): string | nu
   }
 }
 
+/** Object path inside the campaign-assets bucket for a URL, or null (not in bucket / empty remainder). */
+export function assetObjectPath(url: unknown, prefix: string | null): string | null {
+  const clean = sanitizeAssetUrl(url, prefix);
+  if (clean === null || prefix === null) return null;
+  if (!clean.startsWith(prefix)) return null;
+  const rest = clean.slice(prefix.length);
+  return rest === '' ? null : rest;
+}
+
+/** Non-empty URLs present in `before` but absent from `after`; deduped, order kept. */
+export function droppedAssetUrls(before: (string | null | undefined)[], after: (string | null | undefined)[]): string[] {
+  const kept = new Set(after.filter((u): u is string => !!u));
+  const out: string[] = [];
+  for (const u of before) if (u && !kept.has(u) && !out.includes(u)) out.push(u);
+  return out;
+}
+
+/** Bucket object paths no referenced URL points at. Fails closed (returns []) when prefix is null. */
+export function unreferencedPaths(objectPaths: string[], referencedUrls: (string | null | undefined)[], prefix: string | null): string[] {
+  if (prefix === null) return [];
+  const refd = new Set<string>();
+  for (const u of referencedUrls) {
+    const p = assetObjectPath(u, prefix);
+    if (p !== null) refd.add(p);
+  }
+  return objectPaths.filter((p) => !refd.has(p));
+}
+
 const str = (v: unknown, fallback = ''): string => (typeof v === 'string' ? v : fallback).trim();
 
 /**
