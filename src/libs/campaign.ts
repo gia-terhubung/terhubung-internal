@@ -6,7 +6,7 @@
 
 import type {
   CampaignInput, CampaignModules, CampaignRow, CampaignRules, CampaignStatus, CampaignTheme,
-  CampaignVenue, QuestionCategory, QuestionDraft,
+  CampaignVenue, DrawMode, QuestionCategory, QuestionDraft,
 } from '../types/campaign.types';
 
 // ---------- defaults (column defaults in plan 1, except: grand_top_n = 10 and the
@@ -20,6 +20,7 @@ export const DEFAULT_RULES: CampaignRules = {
   comment_points: 2, comment_daily_cap: 3, comment_min_chars: 10,
   daily_timer_sec: 15, weekly_timer_sec: 20, timer_grace_sec: 3,
   grand_top_n: 10,
+  draw_mode: 'live',
 };
 
 export const DEFAULT_THEME: CampaignTheme = {
@@ -40,8 +41,34 @@ export const DEFAULT_VENUE: CampaignVenue = {
 
 export const DEFAULT_MODULES: CampaignModules = { daily: true, weekly: true, prayer: true, comment: true };
 
+export function drawModeOf(rules: { draw_mode?: unknown } | null | undefined): DrawMode {
+  return rules?.draw_mode === 'announce' ? 'announce' : 'live';
+}
+
+// Task 5 (draw console) reuses these. Takes the resolved mode, not `rules`.
+export type PublishClock = {
+  draw_mode: DrawMode; draw_at: string; announced_at: string | null; is_test: boolean; sim_now: string | null;
+};
+
+/** Announce mode, not yet published, campaign clock (sim_now on a test campaign) before draw_at. */
+export function isPrePublish(c: PublishClock, nowMs: number): boolean {
+  if (c.draw_mode !== 'announce' || c.announced_at !== null) return false;
+  const clock = c.is_test && c.sim_now ? Date.parse(c.sim_now) : nowMs;
+  return clock < Date.parse(c.draw_at);
+}
+
+/** draw_at can no longer change. Announce mode stays editable until the announcement time. */
+export function drawAtLocked(c: PublishClock, hasWinners: boolean, nowMs: number): boolean {
+  if (c.draw_mode === 'live') return hasWinners;
+  return hasWinners && !isPrePublish(c, nowMs);
+}
+
+export const ANNOUNCE_HANDOVER_NOTE = 'Tim Terhubung akan menghubungi pemenang untuk mengatur pengambilan hadiah.';
+// next store release after 1.2.0 (currently 1.2.1 — confirm at ship)
+export const ANNOUNCE_MIN_APP_VERSION = '1.2.1';
+
 export interface RuleField {
-  key: keyof CampaignRules;
+  key: Exclude<keyof CampaignRules, 'draw_mode'>;
   label: string;
   group: 'points' | 'timers' | 'grand';
   min: number;
@@ -265,6 +292,8 @@ export function validateCampaignInput(i: CampaignInput): string | null {
   if ([s, c, d].some(Number.isNaN)) return 'Tanggal tidak valid.';
   if (!(s < c)) return 'Tanggal tutup harus setelah tanggal mulai.';
   if (!(c <= d)) return 'Tanggal undian tidak boleh sebelum tanggal tutup.';
+  const mode = (i.rules as unknown as { draw_mode?: unknown }).draw_mode;
+  if (mode !== 'live' && mode !== 'announce') return 'Mode undian tidak valid.';
   for (const f of RULE_FIELDS) {
     const v = i.rules[f.key];
     if (!Number.isInteger(v) || v < f.min || v > f.max) return `${f.label}: isi angka bulat ${f.min}–${f.max}.`;
@@ -325,6 +354,7 @@ export function sanitizeCampaignInput(i: CampaignInput, assetPrefix: string | nu
     const v = (i.rules as unknown as Record<string, unknown> | undefined)?.[f.key];
     rules[f.key] = typeof v === 'number' ? v : Number.NaN;
   }
+  rules.draw_mode = drawModeOf(i.rules);
   const modules = { ...DEFAULT_MODULES };
   for (const k of Object.keys(DEFAULT_MODULES) as (keyof CampaignModules)[]) {
     const v = (i.modules as unknown as Record<string, unknown> | undefined)?.[k];
@@ -514,6 +544,9 @@ const RPC_ERRORS: Record<string, string> = {
   already_won: 'Orang ini sudah menang undian. Kemenangannya tetap; pengecualian tidak bisa ditambahkan.',
   already_excluded: 'Orang ini sudah dikecualikan dari undian.',
   frozen: 'Peserta sudah dibekukan. Pengecualian tidak bisa dihapus lagi.',
+  invalid_reason: 'Pilih alasan undi ulang.',
+  not_announce_mode: 'Undi ulang hanya untuk campaign mode pengumuman.',
+  already_published: 'Pemenang sudah diumumkan. Undi ulang tidak bisa lagi.',
 };
 
 /** Maps a plan 1 error code (exact, or embedded in the PostgREST message) to copy. */

@@ -3,13 +3,13 @@
 import { revalidatePath } from 'next/cache';
 import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
-import { DEFAULT_RULES, addDays, campaignAssetPrefix, diffDays, isUuid, rpcErrorMessage, sanitizeAssetUrl, sanitizeCampaignInput, validateCampaignInput, wibDate } from '@/libs/campaign';
+import { DEFAULT_RULES, addDays, drawAtLocked, drawModeOf, campaignAssetPrefix, diffDays, isUuid, rpcErrorMessage, sanitizeAssetUrl, sanitizeCampaignInput, validateCampaignInput, wibDate } from '@/libs/campaign';
 import type { ActionResult } from '@/types/internal.types';
 import { orIlike } from '@/libs/pagination';
 import type { ActionResultWith, CampaignInput, CampaignRow, ChurchOption, PrizeInput } from '@/types/campaign.types';
 
 const COLS =
-  'id, name, status, is_test, sim_now, start_at, close_at, draw_at, frozen_at, theme, venue, modules, rules, created_at, updated_at';
+  'id, name, status, is_test, sim_now, start_at, close_at, draw_at, frozen_at, announced_at, theme, venue, modules, rules, created_at, updated_at';
 
 function campaignDb() {
   return createAdminClient().schema('campaign');
@@ -140,8 +140,13 @@ async function updateCampaign(id: string, input: CampaignInput): Promise<ActionR
   if (changed(cur.close_at, data.close_at) && cur.frozen_at) {
     return { ok: false, error: 'Tanggal tutup tidak bisa diubah setelah peserta dibekukan.' };
   }
-  if (changed(cur.draw_at, data.draw_at) && drawn) {
-    return { ok: false, error: 'Tanggal undian tidak bisa diubah setelah pengundian dimulai.' };
+  if (changed(cur.draw_at, data.draw_at) && drawAtLocked({ ...cur, draw_mode: drawModeOf(cur.rules) }, drawn, now)) {
+    return {
+      ok: false,
+      error: drawModeOf(cur.rules) === 'announce'
+        ? 'Waktu pengumuman tidak bisa diubah setelah pemenang diumumkan.'
+        : 'Tanggal undian tidak bisa diubah setelah pengundian dimulai.',
+    };
   }
   if (data.is_test !== cur.is_test && cur.status !== 'draft') {
     return { ok: false, error: 'Jenis campaign (uji coba atau asli) hanya bisa diubah saat draft.' };
@@ -154,6 +159,10 @@ async function updateCampaign(id: string, input: CampaignInput): Promise<ActionR
   }
   if (cur.frozen_at && data.rules.grand_top_n !== cur.rules.grand_top_n) {
     return { ok: false, error: 'Jumlah peringkat teratas terkunci setelah peserta dibekukan.' };
+  }
+  // The DB does not guard draw_mode; this is the only guard. Also refuse once any winner exists.
+  if ((cur.frozen_at || drawn) && drawModeOf(data.rules) !== drawModeOf(cur.rules)) {
+    return { ok: false, error: 'Mode undian terkunci setelah peserta dibekukan.' };
   }
   if (cur.status === 'published') {
     const overlap = await overlapError(id, await churchIdsOf(id), data.start_at, data.draw_at);

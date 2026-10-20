@@ -1,6 +1,8 @@
 // Hand-written mirrors of the `campaign` schema (no type-gen).
 // Contract: docs/plans/CAMPAIGN_IMPL_1_DB_PLAN.md — keep field names identical.
 
+export type DrawMode = 'live' | 'announce';
+
 export interface CampaignRules {
   daily_checkin_points: number;
   daily_correct_bonus: number;
@@ -16,6 +18,7 @@ export interface CampaignRules {
   weekly_timer_sec: number;
   timer_grace_sec: number;
   grand_top_n: number; // top N overall (all churches): fixed prize; the grand prize is drawn from them
+  draw_mode: DrawMode; // missing in old rows = 'live'
 }
 
 export interface CampaignTheme {
@@ -53,6 +56,7 @@ export interface CampaignRow {
   close_at: string;
   draw_at: string;
   frozen_at: string | null;
+  announced_at: string | null; // set when announce-mode winners are published
   theme: CampaignTheme;
   venue: CampaignVenue;
   modules: CampaignModules;
@@ -77,6 +81,7 @@ export interface CampaignLocks {
   draw: boolean;
   isTest: boolean;
   topN: boolean; // rules.grand_top_n locked once participants are frozen
+  drawMode: boolean; // rules.draw_mode locked once participants are frozen
 }
 
 export interface ChurchOption {

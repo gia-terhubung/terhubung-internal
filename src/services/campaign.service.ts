@@ -2,14 +2,14 @@ import 'server-only';
 import { cache } from 'react';
 import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
-import { computeStatus, defaultCampaignInput, isUuid } from '@/libs/campaign';
+import { computeStatus, defaultCampaignInput, drawAtLocked, drawModeOf, isUuid } from '@/libs/campaign';
 import { PAGE_SIZE, clampPage, escapeLike, pageRange, type Paged } from '@/libs/pagination';
 import type {
   AdminStatsRow, AdminTopRow, AdminWinnerRow, CampaignDetail, CampaignInput, CampaignListItem, CampaignRow, ChurchOption, DrawExclusionRow, MonitorData, ParticipantRow, PrizeRow, QuestionCategory, QuestionRow, SlotRow,
 } from '@/types/campaign.types';
 
 const CAMPAIGN_COLS =
-  'id, name, status, is_test, sim_now, start_at, close_at, draw_at, frozen_at, theme, venue, modules, rules, created_at, updated_at';
+  'id, name, status, is_test, sim_now, start_at, close_at, draw_at, frozen_at, announced_at, theme, venue, modules, rules, created_at, updated_at';
 
 function campaignDb() {
   return createAdminClient().schema('campaign');
@@ -86,9 +86,10 @@ export const getCampaignDetail = cache(async (id: string): Promise<CampaignDetai
     locks: {
       start: !campaign.is_test && now >= Date.parse(campaign.start_at),
       close: campaign.frozen_at !== null,
-      draw: hasWinners,
+      draw: drawAtLocked({ ...campaign, draw_mode: drawModeOf(campaign.rules) }, hasWinners, now),
       isTest: campaign.status !== 'draft',
       topN: campaign.frozen_at !== null,
+      drawMode: campaign.frozen_at !== null || hasWinners,
     },
   };
 });

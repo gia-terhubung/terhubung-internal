@@ -7,6 +7,7 @@ import {
   campaignDays, computeStatus, isoToWibInput, parseCsv, parseQuestionCsv, rpcErrorMessage,
   countableWeeks, lastDay, resolveRequirements, toCsv, totalDays, validateCampaignInput, weekNo, weekRange, wibDate,
   wibInputToIso, isUuid, campaignAssetPrefix, sanitizeAssetUrl, sanitizeCampaignInput, slotOutOfPeriod,
+  drawModeOf, isPrePublish, drawAtLocked,
 } from '../src/libs/campaign.ts';
 
 // L1 WIB day: 2026-11-01 17:30 UTC = 2026-11-02 00:30 WIB
@@ -72,7 +73,7 @@ const base = {
   id: 'x', name: 'Uji', status: 'published' as const, is_test: false, sim_now: null,
   start_at: start, close_at: '2026-12-31T18:00:00+07:00', draw_at: '2026-12-31T19:00:00+07:00', frozen_at: null,
   theme: DEFAULT_THEME, venue: DEFAULT_VENUE, modules: DEFAULT_MODULES, rules: DEFAULT_RULES,
-  created_at: start, updated_at: start,
+  created_at: start, updated_at: start, announced_at: null,
 };
 assert.equal(computeStatus(base, false, Date.parse('2026-10-20T00:00:00Z')), 'scheduled');
 assert.equal(computeStatus(base, false, Date.parse('2026-11-10T00:00:00Z')), 'running');
@@ -151,5 +152,27 @@ assert.match(parseQuestionCsv('prompt,option_a,option_b,correct,category,difficu
   assert.equal(slotOutOfPeriod(s7, c7, { kind: 'weekly', for_date: null, week_no: 6 }), false);
   assert.equal(slotOutOfPeriod(s7, c7, { kind: 'weekly', for_date: null, week_no: 7 }), true);
 }
+
+// Announce mode: draw_mode helper, publish clock, locks, preserved by sanitize
+assert.equal(drawModeOf(undefined), 'live');
+assert.equal(drawModeOf({ draw_mode: 'foo' }), 'live');
+assert.equal(drawModeOf({ draw_mode: 'announce' }), 'announce');
+{
+  const T = Date.parse('2026-12-31T19:00:00+07:00');
+  const ann = { draw_mode: 'announce' as const, draw_at: '2026-12-31T19:00:00+07:00', announced_at: null, is_test: false, sim_now: null };
+  assert.equal(isPrePublish(ann, T - 1000), true);
+  assert.equal(isPrePublish({ ...ann, draw_mode: 'live' }, T - 1000), false);
+  assert.equal(drawAtLocked({ ...ann, draw_mode: 'live' }, true, T - 1000), true);
+  assert.equal(drawAtLocked(ann, true, T - 1000), false);
+  assert.equal(drawAtLocked(ann, true, T), true);
+  assert.equal(drawAtLocked({ ...ann, announced_at: '2026-12-31T12:00:05Z' }, true, T - 1000), true);
+  assert.equal(drawAtLocked({ ...ann, is_test: true, sim_now: '2026-12-31T19:00:01+07:00' }, true, T - 1000), true);
+}
+assert.equal(sanitizeCampaignInput({ ...input, rules: { ...DEFAULT_RULES, draw_mode: 'announce' } }, null).rules.draw_mode, 'announce');
+assert.equal(sanitizeCampaignInput({ ...input, rules: { ...DEFAULT_RULES, draw_mode: 'zzz' } } as never, null).rules.draw_mode, 'live');
+assert.notEqual(validateCampaignInput({ ...input, rules: { ...DEFAULT_RULES, draw_mode: 'x' } } as never), null);
+assert.equal(rpcErrorMessage('already_published'), 'Pemenang sudah diumumkan. Undi ulang tidak bisa lagi.');
+assert.equal(rpcErrorMessage('invalid_reason'), 'Pilih alasan undi ulang.');
+assert.equal(rpcErrorMessage('not_announce_mode'), 'Undi ulang hanya untuk campaign mode pengumuman.');
 
 console.log('check-campaign-lib: all assertions passed');

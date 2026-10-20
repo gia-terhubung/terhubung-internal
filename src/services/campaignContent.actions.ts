@@ -168,7 +168,7 @@ export async function searchQuestionsAction(params: {
 async function loadCampaignRow(id: string): Promise<CampaignRow | null> {
   const { data, error } = await campaignDb()
     .from('campaigns')
-    .select('id, name, status, is_test, sim_now, start_at, close_at, draw_at, frozen_at, theme, venue, modules, rules, created_at, updated_at')
+    .select('id, name, status, is_test, sim_now, start_at, close_at, draw_at, frozen_at, announced_at, theme, venue, modules, rules, created_at, updated_at')
     .eq('id', id)
     .maybeSingle();
   if (error) throw new Error(error.message);

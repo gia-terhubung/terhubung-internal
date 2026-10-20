@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation';
 import { createCampaignAction, updateCampaignAction } from '@/services/campaign.actions';
 import { ImageUploadField } from '@/components/molecules/ImageUploadField.molecule';
 import {
-  RULE_FIELDS, formatLongDay, isoToWibInput, lastDay, resolveRequirements, validateCampaignInput, weekRange, wibInputToIso,
+  ANNOUNCE_MIN_APP_VERSION, RULE_FIELDS, formatLongDay, isoToWibInput, lastDay, resolveRequirements, validateCampaignInput, weekRange, wibInputToIso,
   type RuleField,
 } from '@/libs/campaign';
-import type { CampaignInput, CampaignLocks, CampaignModules, CampaignRules } from '@/types/campaign.types';
+import type { CampaignInput, CampaignLocks, CampaignModules, DrawMode } from '@/types/campaign.types';
 
 const inputCls =
   'mt-1 w-full rounded-lg border border-border-color bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none focus:border-brand disabled:opacity-50';
@@ -78,8 +78,9 @@ export function CampaignSettingsForm({
     setSaved(false);
     setForm((f) => ({ ...f, ...p }));
   }
-  const setRule = (k: keyof CampaignRules, v: number) => patch({ rules: { ...form.rules, [k]: v } });
+  const setRule = (k: RuleField['key'], v: number) => patch({ rules: { ...form.rules, [k]: v } });
 
+  const announce = form.rules.draw_mode === 'announce';
   const clientError = validateCampaignInput(form);
   const req = useMemo(
     () => (clientError === null ? resolveRequirements(form.start_at, form.close_at, assignedWeeks) : null),
@@ -159,13 +160,31 @@ export function CampaignSettingsForm({
       </Section>
 
       <Section title="Tanggal (WIB)" hint="Semua aturan, kuis, pengingat, dan hitung mundur mengikuti tanggal ini.">
+        <label className="mb-4 block sm:max-w-xs">
+          <span className={labelCls}>Mode undian</span>
+          <select
+            value={form.rules.draw_mode}
+            disabled={locks.drawMode}
+            onChange={(e) => patch({ rules: { ...form.rules, draw_mode: e.target.value as DrawMode } })}
+            className={inputCls}
+          >
+            <option value="live">Undian live</option>
+            <option value="announce">Pengumuman pemenang</option>
+          </select>
+          {locks.drawMode && <span className="mt-1 block text-xs text-text-secondary">Terkunci: peserta sudah dibekukan.</span>}
+        </label>
+        {announce && (
+          <p className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-text-primary">
+            {`Aplikasi versi lama tetap menampilkan teks undian live. Naikkan versi minimum di App Config ke ${ANNOUNCE_MIN_APP_VERSION} sebelum memakai mode ini.`}
+          </p>
+        )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <DateTimeField label="Mulai" value={form.start_at} onChange={(v) => patch({ start_at: v })}
             disabled={locks.start} lockedHint="Terkunci: campaign sudah dimulai." />
           <DateTimeField label="Tutup quest (peserta dibekukan)" value={form.close_at} onChange={(v) => patch({ close_at: v })}
             disabled={locks.close} lockedHint="Terkunci: peserta sudah dibekukan."
             helper={formLastDay ? `Hari terakhir check-in: ${formatLongDay(formLastDay)}` : undefined} />
-          <DateTimeField label="Undian live" value={form.draw_at} onChange={(v) => patch({ draw_at: v })}
+          <DateTimeField label={announce ? 'Waktu pengumuman' : 'Undian live'} value={form.draw_at} onChange={(v) => patch({ draw_at: v })}
             disabled={locks.draw} lockedHint="Terkunci: pengundian sudah dimulai." />
         </div>
         {(orphanDaily > 0 || orphanWeeks > 0) && (
@@ -223,7 +242,7 @@ export function CampaignSettingsForm({
         </div>
       </Section>
 
-      <Section title="Lokasi acara" hint="Pemenang menerima hadiah langsung di lokasi ini. Ditampilkan di aplikasi saat minggu undian.">
+      <Section title="Lokasi acara" hint={announce ? 'Opsional di mode pengumuman: tidak ditampilkan di aplikasi.' : 'Pemenang menerima hadiah langsung di lokasi ini. Ditampilkan di aplikasi saat minggu undian.'}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="block">
             <span className={labelCls}>Nama tempat</span>
