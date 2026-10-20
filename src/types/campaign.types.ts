@@ -256,6 +256,20 @@ export interface DrawExclusionRow {
   created_at: string;
 }
 
+// campaign.admin_winner_removals row (announce-mode "Undi ulang" audit).
+export interface WinnerRemovalRow {
+  id: string;
+  prize_name: string;
+  prize_type: 'normal' | 'grand';
+  display_name: string;
+  church_name: string;
+  reason_kind: 'unreachable' | 'ineligible';
+  reason: string;
+  removed_by_name: string | null;
+  removed_at: string;
+  replacement_display_name: string | null; // null: no replacement (pool empty) or the replacement was removed later
+}
+
 // campaign.search_draw_candidates row: user_id for app users, person_id for non-app members.
 export interface DrawCandidateRow {
   user_id: string | null;

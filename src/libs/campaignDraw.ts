@@ -4,6 +4,7 @@
 // Error copy and isUuid live in ./campaign.ts (plan 2): reuse them, never duplicate.
 
 import type { PrizeType } from '../types/campaign.types';
+import type { DrawAllReport } from '../types/campaignDraw.types';
 
 /** Drawable prize types. 'top' (hadiah tetap) is never drawn. */
 export type DrawPrizeType = Exclude<PrizeType, 'top'>;
@@ -123,4 +124,64 @@ export function queueShortfalls(
     used[p.prize_type] += remaining;
   }
   return out;
+}
+
+export interface DrawUnit {
+  prize_id: string;
+  prize_type: DrawPrizeType;
+}
+
+/** Announce mode "Undi semua": every remaining unit, in the given (already ordered) prize sequence. */
+export function drawAllUnits<T extends { id: string; prize_type: DrawPrizeType; quantity: number; drawn: number }>(
+  prizes: T[]
+): DrawUnit[] {
+  const units: DrawUnit[] = [];
+  for (const p of prizes) {
+    for (let i = p.drawn; i < p.quantity; i++) units.push({ prize_id: p.id, prize_type: p.prize_type });
+  }
+  return units;
+}
+
+/**
+ * Draws units one at a time (one drawOne call each, so no single server call grows with the prize count).
+ * Pool empty: that prize is marked stopped and the rest of its prize type is skipped (also marked stopped);
+ * the other type goes on.
+ * Any other error stops the run. onProgress gets the number of units handled (drawn or skipped).
+ */
+export async function runDrawAll(
+  units: DrawUnit[],
+  drawOne: (prizeId: string) => Promise<{ ok: true } | { ok: false; error: string }>,
+  isPoolEmpty: (error: string) => boolean,
+  onProgress?: (done: number) => void
+): Promise<DrawAllReport> {
+  const perPrize: DrawAllReport['perPrize'] = [];
+  const byId = new Map<string, DrawAllReport['perPrize'][number]>();
+  const emptyTypes = new Set<DrawPrizeType>();
+  let drawn = 0;
+  let done = 0;
+  for (const u of units) {
+    let row = byId.get(u.prize_id);
+    if (!row) {
+      row = { prize_id: u.prize_id, drawn: 0, stopped: null };
+      byId.set(u.prize_id, row);
+      perPrize.push(row);
+    }
+    if (emptyTypes.has(u.prize_type)) {
+      row.stopped = 'pool_empty'; // a later prize of an exhausted type: not called, same reason
+    } else {
+      const res = await drawOne(u.prize_id);
+      if (res.ok) {
+        row.drawn += 1;
+        drawn += 1;
+      } else if (isPoolEmpty(res.error)) {
+        row.stopped = 'pool_empty';
+        emptyTypes.add(u.prize_type);
+      } else {
+        return { drawn, perPrize, error: res.error };
+      }
+    }
+    done += 1;
+    onProgress?.(done);
+  }
+  return { drawn, perPrize, error: null };
 }

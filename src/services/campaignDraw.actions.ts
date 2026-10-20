@@ -10,6 +10,7 @@ import type {
   DrawResult,
   DrawWinner,
   FreezeResult,
+  RedrawResult,
   ReelName,
   StageState,
 } from '@/types/campaignDraw.types';
@@ -59,6 +60,39 @@ export async function drawNextAction(campaignId: string, prizeId: string): Promi
       drawn_at: String(w.drawn_at),
     },
   };
+}
+
+// Announce mode, before publish: campaign.redraw_winner removes the win(s), writes the audit rows and
+// draws replacements in one transaction. pool_empty per prize is reported, not raised.
+export async function redrawWinnerAction(
+  campaignId: string,
+  winnerId: string,
+  reasonKind: 'unreachable' | 'ineligible',
+  note: string
+): Promise<RedrawResult> {
+  const { user } = await requireInternalAdmin();
+  if (!isUuid(campaignId) || !isUuid(winnerId)) return { ok: false, error: rpcErrorMessage('not_found') };
+  if (reasonKind !== 'unreachable' && reasonKind !== 'ineligible') return { ok: false, error: rpcErrorMessage('invalid_reason') };
+  if (typeof note !== 'string' || !note.trim()) return { ok: false, error: rpcErrorMessage('note_required') };
+  const db = createAdminClient().schema('campaign');
+
+  // redraw_winner does not know the URL's campaign: make sure the winner belongs to it (same as drawNextAction).
+  const { data: win, error: winErr } = await db
+    .from('winners').select('id').eq('id', winnerId).eq('campaign_id', campaignId).maybeSingle();
+  if (winErr) return { ok: false, error: winErr.message };
+  if (!win) return { ok: false, error: rpcErrorMessage('not_found') };
+
+  const { data, error } = await db.rpc('redraw_winner', {
+    p_winner_id: winnerId,
+    p_reason_kind: reasonKind,
+    p_note: note.trim(),
+    p_operator: user.id,
+  });
+  if (error) return { ok: false, error: rpcErrorMessage(error.message) };
+
+  revalidatePath('/campaigns/[id]', 'layout');
+  const r = data as { removed: unknown[]; replacements: unknown[]; pool_empty: unknown[] };
+  return { ok: true, replaced: r.replacements?.length ?? 0, poolEmpty: r.pool_empty?.length ?? 0 };
 }
 
 export async function getStageStateAction(campaignId: string): Promise<StageState | null> {

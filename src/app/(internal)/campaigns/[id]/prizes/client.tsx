@@ -5,17 +5,22 @@ import { useRouter } from 'next/navigation';
 import { ConfirmDialog } from '@/components/molecules/ConfirmDialog.molecule';
 import { PrizeModal } from '@/components/organisms/PrizeModal.organism';
 import { deletePrizeAction } from '@/services/campaign.actions';
-import type { PrizeRow, PrizeType } from '@/types/campaign.types';
+import type { DrawMode, PrizeRow, PrizeType } from '@/types/campaign.types';
 
-function groups(topN: number): { type: PrizeType; title: string; hint: string }[] {
+function groups(topN: number, drawMode: DrawMode): { type: PrizeType; title: string; hint: string }[] {
+  const handover = drawMode === 'announce' ? 'Tim Terhubung akan menghubungi penerima.' : 'diserahkan di lokasi acara.';
   return [
-    { type: 'top', title: `Hadiah tetap (${topN} besar)`, hint: `Tidak diundi. Untuk peringkat 1–${topN} dari semua gereja, diserahkan di lokasi acara.` },
+    { type: 'top', title: `Hadiah tetap (${topN} besar)`, hint: `Tidak diundi. Untuk peringkat 1–${topN} dari semua gereja, ${handover}` },
     { type: 'normal', title: 'Hadiah reguler', hint: `Diundi lebih dulu dari semua jemaat gereja peserta, termasuk yang tanpa aplikasi dan ${topN} besar.` },
     { type: 'grand', title: 'Hadiah utama', hint: `Diundi terakhir dari ${topN} besar.` },
   ];
 }
 
-export function PrizesClient({ campaignId, prizes, topN }: { campaignId: string; prizes: PrizeRow[]; topN: number }) {
+export function PrizesClient({
+  campaignId, prizes, topN, drawMode,
+}: {
+  campaignId: string; prizes: PrizeRow[]; topN: number; drawMode: DrawMode;
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState<PrizeRow | null | undefined>(undefined); // undefined = closed, null = create
   const [deleting, setDeleting] = useState<PrizeRow | null>(null);
@@ -46,7 +51,7 @@ export function PrizesClient({ campaignId, prizes, topN }: { campaignId: string;
       </div>
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      {groups(topN).map((g) => {
+      {groups(topN, drawMode).map((g) => {
         const rows = prizes.filter((p) => p.prize_type === g.type);
         return (
           <section key={g.type} className="rounded-xl border border-border-color bg-bg-secondary p-5">

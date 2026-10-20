@@ -1,16 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ConfirmDialog } from '@/components/molecules/ConfirmDialog.molecule';
 import { Badge } from '@/components/atoms/Badge.atom';
-import { drawNextAction, freezePoolAction } from '@/services/campaignDraw.actions';
-import { formatWib } from '@/libs/campaign';
-import { formatCount, queueShortfalls } from '@/libs/campaignDraw';
-import type { DrawConsoleState, DrawWinner } from '@/types/campaignDraw.types';
+import { drawNextAction, freezePoolAction, redrawWinnerAction } from '@/services/campaignDraw.actions';
+import { formatWib, isPrePublish, rpcErrorMessage } from '@/libs/campaign';
+import { drawAllUnits, formatCount, queueShortfalls, runDrawAll } from '@/libs/campaignDraw';
+import type { DrawAllReport, DrawConsoleState, DrawWinner } from '@/types/campaignDraw.types';
 
 const KIND_LABEL = { grand: 'Hadiah utama', normal: 'Hadiah' } as const;
+const CONNECTION_ERROR = 'Koneksi ke server gagal. Klik "Muat ulang" dan cek daftar pemenang sebelum mengundi lagi.';
+const POOL_EMPTY = rpcErrorMessage('pool_empty');
 
 export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
   const router = useRouter();
@@ -23,11 +25,26 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [last, setLast] = useState<DrawWinner | null>(null);
   const [showMode, setShowMode] = useState(false);
+  // Announce mode
+  const [confirmDrawAll, setConfirmDrawAll] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [report, setReport] = useState<DrawAllReport | null>(null);
+  const [redrawTarget, setRedrawTarget] = useState<DrawWinner | null>(null);
+  // Lazy init + a slow tick: Date.now() is impure during render (react-hooks/purity).
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   // Never cache quantities: everything below comes from the latest server read.
   const { campaign, pool, poolLeft, eligiblePreview, prizes, winners, top, topN, topFrozen } = state;
   const frozen = campaign.frozen_at !== null;
   const hasWinners = winners.length > 0;
+  const announce = campaign.draw_mode === 'announce';
+  const prePublish = isPrePublish(campaign, nowMs);
+  const units = drawAllUnits(prizes);
+  const prizeName = new Map(prizes.map((p) => [p.id, p.name]));
 
   async function draw(prizeId: string) {
     if (inFlight.current) return;
@@ -45,10 +62,65 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
       }
     } catch {
       // Network drop or the 1-hour session cap redirect: the draw may already be committed.
-      setError('Koneksi ke server gagal. Klik "Muat ulang" dan cek daftar pemenang sebelum mengundi lagi.');
+      setError(CONNECTION_ERROR);
     } finally {
       inFlight.current = false;
       setBusyPrize(null);
+    }
+  }
+
+  // "Undi semua": one drawNextAction (one RPC) per unit, so no single server call grows with the prize count.
+  async function drawAll() {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusyPrize('all');
+    setError(null);
+    setNotice(null);
+    setReport(null);
+    setConfirmDrawAll(false);
+    const total = units.length;
+    setProgress({ done: 0, total });
+    try {
+      const res = await runDrawAll(
+        units,
+        async (id) => {
+          try {
+            return await drawNextAction(campaign.id, id);
+          } catch {
+            return { ok: false, error: CONNECTION_ERROR };
+          }
+        },
+        (e) => e === POOL_EMPTY,
+        (done) => setProgress({ done, total })
+      );
+      setReport(res);
+      if (res.error) setError(res.error);
+    } finally {
+      inFlight.current = false;
+      setBusyPrize(null);
+      setProgress(null);
+      router.refresh();
+    }
+  }
+
+  async function redraw(winner: DrawWinner, reasonKind: 'unreachable' | 'ineligible', note: string) {
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await redrawWinnerAction(campaign.id, winner.id, reasonKind, note);
+      if (res.ok) {
+        setNotice(
+          `Diganti: ${res.replaced}.` +
+            (res.poolEmpty > 0 ? ` ${res.poolEmpty} hadiah belum terisi: ${POOL_EMPTY}` : '')
+        );
+        router.refresh();
+      } else {
+        setError(res.error);
+      }
+    } catch {
+      setError(CONNECTION_ERROR);
+    } finally {
+      setRedrawTarget(null);
     }
   }
 
@@ -78,9 +150,11 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-text-primary">Undian live</h2>
+          <h2 className="text-lg font-semibold text-text-primary">{announce ? 'Undian' : 'Undian live'}</h2>
           <p className="mt-1 text-sm text-text-secondary">
-            Undian dijalankan di server. Layar panggung hanya menampilkan hasil yang sudah tercatat.
+            {announce
+              ? 'Undian dijalankan di server. Pemenang tampil di aplikasi pada waktu pengumuman.'
+              : 'Undian dijalankan di server. Layar panggung hanya menampilkan hasil yang sudah tercatat.'}
           </p>
         </div>
         <div className="flex gap-2">
@@ -90,22 +164,33 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
           >
             Muat ulang
           </button>
-          <button
-            onClick={() => setShowMode(true)}
-            className="rounded-lg bg-bg-hover px-3 py-2 text-sm text-text-primary hover:bg-bg-tertiary"
-          >
-            Mode tayang
-          </button>
-          <Link
-            href={`/campaigns/${campaign.id}/stage`}
-            target="_blank"
-            rel="noopener"
-            className="rounded-lg bg-brand px-3 py-2 text-sm font-bold text-brand-content hover:bg-brand-hover"
-          >
-            Buka layar panggung
-          </Link>
+          {/* Announce mode: no stage. The stage route stays reachable by URL (admin-only). */}
+          {!announce && (
+            <>
+              <button
+                onClick={() => setShowMode(true)}
+                className="rounded-lg bg-bg-hover px-3 py-2 text-sm text-text-primary hover:bg-bg-tertiary"
+              >
+                Mode tayang
+              </button>
+              <Link
+                href={`/campaigns/${campaign.id}/stage`}
+                target="_blank"
+                rel="noopener"
+                className="rounded-lg bg-brand px-3 py-2 text-sm font-bold text-brand-content hover:bg-brand-hover"
+              >
+                Buka layar panggung
+              </Link>
+            </>
+          )}
         </div>
       </div>
+
+      {announce && (
+        <div role="status" className="rounded-lg border border-border-color bg-bg-secondary p-3 text-sm font-medium text-text-primary">
+          {prePublish ? `Belum diumumkan · tampil di aplikasi ${formatWib(campaign.draw_at)}` : 'Sudah diumumkan'}
+        </div>
+      )}
 
       {error && (
         <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600">
@@ -159,6 +244,25 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
         )}
       </section>
 
+      {progress && (
+        <div role="status" className="rounded-lg border border-border-color bg-bg-secondary p-3 text-sm text-text-primary">
+          Mengundi… {progress.done} / {progress.total}
+        </div>
+      )}
+      {report && (
+        <section className="rounded-xl border border-border-color bg-bg-secondary p-4">
+          <h3 className="font-semibold text-text-primary">Hasil undi semua: {formatCount(report.drawn)} pemenang</h3>
+          <ul className="mt-2 space-y-1 text-sm">
+            {report.perPrize.map((r) => (
+              <li key={r.prize_id} className="text-text-secondary">
+                <span className="text-text-primary">{prizeName.get(r.prize_id) ?? 'Hadiah'}</span>: {r.drawn} diundi
+                {r.stopped === 'pool_empty' && <span className="text-amber-600"> · {POOL_EMPTY}</span>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Last result */}
       {last && (
         <section className="rounded-xl border-2 border-brand bg-bg-secondary p-6 text-center">
@@ -195,7 +299,18 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
 
       {/* Prize queue: normal first, then grand. 'top' prizes are never queued. */}
       <section className="rounded-xl border border-border-color bg-bg-secondary">
-        <h2 className="border-b border-border-color p-4 font-semibold text-text-primary">Urutan undian</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-color p-4">
+          <h2 className="font-semibold text-text-primary">Urutan undian</h2>
+          {announce && (
+            <button
+              onClick={() => setConfirmDrawAll(true)}
+              disabled={!frozen || units.length === 0 || busyPrize !== null}
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-bold text-brand-content hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {busyPrize === 'all' ? 'Mengundi…' : 'Undi semua'}
+            </button>
+          )}
+        </div>
         <p className="border-b border-border-color px-4 py-2 text-xs text-text-secondary">
           Belum menang: {formatCount(poolLeft.normal)} peserta hadiah reguler, {formatCount(poolLeft.grand)} dari {topN} besar untuk hadiah utama.
           Jumlah hadiah diambil ulang setiap selesai mengundi; klik &quot;Muat ulang&quot; setelah mengubah jumlah hadiah.
@@ -248,6 +363,15 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
               <span className="flex-1 font-medium text-text-primary">{w.display_name}</span>
               <span className="flex-1 text-text-secondary">{w.church_name}</span>
               <span className="flex-1 text-sm text-text-secondary">{w.prize_name}</span>
+              {announce && prePublish && (
+                <button
+                  onClick={() => setRedrawTarget(w)}
+                  disabled={busyPrize !== null}
+                  className="rounded-lg bg-bg-hover px-3 py-1.5 text-sm text-text-primary hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Undi ulang
+                </button>
+              )}
             </li>
           ))}
           {winners.length === 0 && <li className="p-4 text-sm text-text-secondary">Belum ada pemenang.</li>}
@@ -265,6 +389,24 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
           confirmLabel="Bekukan"
           onConfirm={freeze}
           onClose={() => setConfirmFreeze(false)}
+        />
+      )}
+
+      {confirmDrawAll && (
+        <ConfirmDialog
+          title="Undi semua hadiah?"
+          message={`${formatCount(units.length)} hadiah yang tersisa diundi sekarang, satu per satu. Jangan tutup halaman ini sampai selesai.`}
+          confirmLabel="Undi semua"
+          onConfirm={drawAll}
+          onClose={() => setConfirmDrawAll(false)}
+        />
+      )}
+
+      {redrawTarget && (
+        <RedrawDialog
+          winner={redrawTarget}
+          onConfirm={(kind, note) => redraw(redrawTarget, kind, note)}
+          onClose={() => setRedrawTarget(null)}
         />
       )}
 
@@ -292,6 +434,95 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
           </ol>
         </div>
       )}
+    </div>
+  );
+}
+
+// ConfirmDialog-style modal with a reason and a required note (ConfirmDialog has no form fields).
+function RedrawDialog({
+  winner,
+  onConfirm,
+  onClose,
+}: {
+  winner: DrawWinner;
+  onConfirm: (kind: 'unreachable' | 'ineligible', note: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [kind, setKind] = useState<'unreachable' | 'ineligible'>('unreachable');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function confirm() {
+    setBusy(true);
+    try {
+      await onConfirm(kind, note.trim());
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="flex w-full max-w-sm flex-col rounded-xl border border-border-color bg-bg-secondary shadow-2xl">
+        <div className="border-b border-border-color p-5">
+          <h2 className="text-lg font-bold text-text-primary">Undi ulang?</h2>
+        </div>
+        <div className="space-y-3 p-5 text-sm text-text-secondary">
+          <p>
+            {winner.display_name} ({winner.church_name}) · {winner.prize_name}
+          </p>
+          <label className="flex items-start gap-2">
+            <input
+              type="radio"
+              name="redraw-reason"
+              checked={kind === 'unreachable'}
+              onChange={() => setKind('unreachable')}
+              className="mt-1"
+            />
+            <span className="text-text-primary">Tidak bisa dihubungi</span>
+          </label>
+          <label className="flex items-start gap-2">
+            <input
+              type="radio"
+              name="redraw-reason"
+              checked={kind === 'ineligible'}
+              onChange={() => setKind('ineligible')}
+              className="mt-1"
+            />
+            <span>
+              <span className="block text-text-primary">Tidak memenuhi syarat</span>
+              <span className="block text-xs">
+                Dikeluarkan dari semua undian campaign ini, termasuk hadiah lain yang sudah dimenangkan.
+              </span>
+            </span>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-text-primary">Catatan (wajib)</span>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              className="w-full rounded-lg border border-border-color bg-bg-primary p-2 text-text-primary"
+            />
+          </label>
+        </div>
+        <div className="flex justify-end gap-3 border-t border-border-color p-5">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary disabled:opacity-50"
+          >
+            Batal
+          </button>
+          <button
+            onClick={confirm}
+            disabled={busy || note.trim() === ''}
+            className="rounded-lg bg-brand px-5 py-2 text-sm font-bold text-brand-content hover:bg-brand-hover disabled:opacity-50"
+          >
+            {busy ? 'Memproses…' : 'Undi ulang'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

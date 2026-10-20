@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildReel,
+  drawAllUnits,
   formatCount,
   formatCountdown,
   orderPrizesForDraw,
@@ -9,6 +10,7 @@ import {
   prizeShortfall,
   queueShortfalls,
   reelDelays,
+  runDrawAll,
   takeNewWinners,
 } from './campaignDraw.ts';
 
@@ -104,4 +106,57 @@ test('queueShortfalls spends the pool across prizes of the same type in queue or
     { normal: 12, grand: 10 }
   );
   assert.deepEqual(out, { a: { shortfall: 0, left: 12 }, b: { shortfall: 8, left: 2 }, g: { shortfall: 0, left: 10 } });
+});
+
+test('drawAllUnits lists remaining units in the given order and skips finished prizes', () => {
+  assert.deepEqual(
+    drawAllUnits([
+      { id: 'n', prize_type: 'normal', quantity: 3, drawn: 1 },
+      { id: 'g', prize_type: 'grand', quantity: 1, drawn: 1 },
+    ]),
+    [{ prize_id: 'n', prize_type: 'normal' }, { prize_id: 'n', prize_type: 'normal' }]
+  );
+});
+
+test('runDrawAll stops a prize type on pool_empty and keeps drawing the other type', async () => {
+  const calls: string[] = [];
+  let n1 = 0;
+  const progress: number[] = [];
+  const report = await runDrawAll(
+    [
+      { prize_id: 'n1', prize_type: 'normal' },
+      { prize_id: 'n1', prize_type: 'normal' },
+      { prize_id: 'n2', prize_type: 'normal' },
+      { prize_id: 'g1', prize_type: 'grand' },
+    ],
+    async (id) => {
+      calls.push(id);
+      if (id === 'n1' && ++n1 === 2) return { ok: false, error: 'EMPTY' };
+      return { ok: true };
+    },
+    (e) => e === 'EMPTY',
+    (d) => progress.push(d)
+  );
+  assert.deepEqual(calls, ['n1', 'n1', 'g1']);
+  assert.equal(report.drawn, 2);
+  assert.equal(report.error, null);
+  assert.deepEqual(report.perPrize.find((p) => p.prize_id === 'n1'), { prize_id: 'n1', drawn: 1, stopped: 'pool_empty' });
+  assert.deepEqual(report.perPrize.find((p) => p.prize_id === 'n2'), { prize_id: 'n2', drawn: 0, stopped: 'pool_empty' });
+  assert.deepEqual(report.perPrize.find((p) => p.prize_id === 'g1'), { prize_id: 'g1', drawn: 1, stopped: null });
+  assert.equal(progress[progress.length - 1], 4);
+});
+
+test('runDrawAll stops on any other error with no later calls', async () => {
+  const calls: string[] = [];
+  const report = await runDrawAll(
+    [{ prize_id: 'n1', prize_type: 'normal' }, { prize_id: 'g1', prize_type: 'grand' }],
+    async (id) => {
+      calls.push(id);
+      return { ok: false, error: 'boom' };
+    },
+    (e) => e === 'EMPTY'
+  );
+  assert.equal(report.error, 'boom');
+  assert.equal(report.drawn, 0);
+  assert.deepEqual(calls, ['n1']);
 });

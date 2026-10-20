@@ -5,7 +5,7 @@ import { createAdminClient } from '@/libs/supabase/admin';
 import { computeStatus, defaultCampaignInput, drawAtLocked, drawModeOf, isUuid } from '@/libs/campaign';
 import { PAGE_SIZE, clampPage, escapeLike, pageRange, type Paged } from '@/libs/pagination';
 import type {
-  AdminStatsRow, AdminTopRow, AdminWinnerRow, CampaignDetail, CampaignInput, CampaignListItem, CampaignRow, ChurchOption, DrawExclusionRow, MonitorData, ParticipantRow, PrizeRow, QuestionCategory, QuestionRow, SlotRow,
+  AdminStatsRow, AdminTopRow, AdminWinnerRow, CampaignDetail, CampaignInput, CampaignListItem, CampaignRow, ChurchOption, DrawExclusionRow, MonitorData, WinnerRemovalRow, ParticipantRow, PrizeRow, QuestionCategory, QuestionRow, SlotRow,
 } from '@/types/campaign.types';
 
 const CAMPAIGN_COLS =
@@ -270,6 +270,15 @@ export async function getWinners(campaignId: string): Promise<AdminWinnerRow[]> 
   const { data, error } = await campaignDb().rpc('admin_winners', { p_campaign: campaignId });
   if (error) throw new Error(error.message);
   return (data ?? []) as AdminWinnerRow[];
+}
+
+/** Announce-mode "Undi ulang" history (campaign.admin_winner_removals), oldest first. */
+export async function getWinnerRemovals(campaignId: string): Promise<WinnerRemovalRow[]> {
+  await requireInternalAdmin();
+  if (!isUuid(campaignId)) return [];
+  const { data, error } = await campaignDb().rpc('admin_winner_removals', { p_campaign: campaignId });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as WinnerRemovalRow[];
 }
 
 /** Draw opt-out list (plan 4 Task 5), oldest first. */

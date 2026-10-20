@@ -1,7 +1,7 @@
 import 'server-only';
 import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
-import { DEFAULT_THEME, isUuid } from '@/libs/campaign';
+import { DEFAULT_THEME, drawModeOf, isUuid } from '@/libs/campaign';
 import { orderPrizesForDraw, poolLeftByType } from '@/libs/campaignDraw';
 import { getTop } from '@/services/campaign.service';
 import type {
@@ -82,7 +82,7 @@ export async function getDrawConsoleState(campaignId: string): Promise<DrawConso
 
   const { data: campaign, error } = await db
     .from('campaigns')
-    .select('id, name, status, is_test, close_at, draw_at, frozen_at, rules')
+    .select('id, name, status, is_test, close_at, draw_at, frozen_at, announced_at, sim_now, rules')
     .eq('id', campaignId)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -109,10 +109,10 @@ export async function getDrawConsoleState(campaignId: string): Promise<DrawConso
       drawn: drawnByPrize.get(p.id) ?? 0,
     }))
   );
-  const { rules, ...campaignRow } = campaign as Omit<DrawConsoleState['campaign'], 'close_at' | 'draw_at'> & {
+  const { rules, ...campaignRow } = campaign as Omit<DrawConsoleState['campaign'], 'close_at' | 'draw_at' | 'draw_mode'> & {
     close_at: string;
     draw_at: string;
-    rules: { grand_top_n?: number } | null;
+    rules: { grand_top_n?: number; draw_mode?: unknown } | null;
   };
 
   return {
@@ -120,6 +120,7 @@ export async function getDrawConsoleState(campaignId: string): Promise<DrawConso
       ...campaignRow,
       close_at: String(campaignRow.close_at),
       draw_at: String(campaignRow.draw_at),
+      draw_mode: drawModeOf(rules),
     },
     topN: rules?.grand_top_n ?? 10,
     top: top.map((t) => ({

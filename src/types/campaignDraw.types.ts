@@ -1,4 +1,5 @@
 import type { DrawPrizeType, ReelName } from '@/libs/campaignDraw';
+import type { DrawMode } from '@/types/campaign.types';
 
 export type { DrawPrizeType, ReelName };
 
@@ -10,6 +11,9 @@ export interface DrawConsoleCampaign {
   close_at: string;
   draw_at: string;
   frozen_at: string | null;
+  draw_mode: DrawMode; // drawModeOf(rules); rules itself is not passed to the client
+  announced_at: string | null;
+  sim_now: string | null;
 }
 
 export interface DrawPrize {
@@ -89,3 +93,12 @@ export interface StageState {
 
 export type FreezeResult = { ok: true; normal: number; grand: number } | { ok: false; error: string };
 export type DrawResult = { ok: true; winner: DrawWinner } | { ok: false; error: string };
+
+/** "Undi semua" outcome, one perPrize row per prize in the run (skipped same-type prizes are stopped too). */
+export interface DrawAllReport {
+  drawn: number;
+  perPrize: { prize_id: string; drawn: number; stopped: 'pool_empty' | null }[];
+  error: string | null;
+}
+
+export type RedrawResult = { ok: true; replaced: number; poolEmpty: number } | { ok: false; error: string };

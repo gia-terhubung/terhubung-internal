@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { Badge } from '@/components/atoms/Badge.atom';
 import { TabNav } from '@/components/molecules/TabNav.molecule';
 import { getCampaignDetail } from '@/services/campaign.service';
-import { STATUS_LABEL, STATUS_VARIANT, formatWib } from '@/libs/campaign';
+import { STATUS_LABEL, STATUS_VARIANT, drawModeOf, formatWib } from '@/libs/campaign';
 
 export default async function CampaignLayout({
   children,
@@ -17,6 +17,7 @@ export default async function CampaignLayout({
   if (!detail) notFound();
   const c = detail.campaign;
   const base = `/campaigns/${id}`;
+  const announce = drawModeOf(c.rules) === 'announce';
 
   return (
     <div className="space-y-6">
@@ -28,7 +29,7 @@ export default async function CampaignLayout({
           {c.is_test && <Badge variant="warning">Uji coba</Badge>}
         </div>
         <p className="mt-1 text-sm text-text-secondary">
-          {formatWib(c.start_at)} – undian {formatWib(c.draw_at)}
+          {formatWib(c.start_at)} – {announce ? 'pengumuman' : 'undian'} {formatWib(c.draw_at)}
           {c.is_test && c.sim_now ? ` · waktu simulasi ${formatWib(c.sim_now)}` : ''}
         </p>
       </div>
@@ -39,7 +40,7 @@ export default async function CampaignLayout({
           { href: `${base}/schedule`, label: 'Jadwal soal' },
           { href: `${base}/monitor`, label: 'Monitor' },
           { href: `${base}/winners`, label: 'Pemenang' },
-          { href: `${base}/draw`, label: 'Undian live' },
+          { href: `${base}/draw`, label: announce ? 'Undian' : 'Undian live' },
         ]}
       />
       {children}
