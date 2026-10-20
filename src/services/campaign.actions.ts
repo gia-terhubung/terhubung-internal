@@ -3,7 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
-import { DEFAULT_RULES, addDays, drawAtLocked, drawModeOf, campaignAssetPrefix, diffDays, isUuid, rpcErrorMessage, sanitizeAssetUrl, sanitizeCampaignInput, validateCampaignInput, wibDate } from '@/libs/campaign';
+import { removeUnreferencedAssets } from '@/services/campaignAssets.service';
+import { DEFAULT_RULES, addDays, droppedAssetUrls, drawAtLocked, drawModeOf, campaignAssetPrefix, diffDays, isUuid, rpcErrorMessage, sanitizeAssetUrl, sanitizeCampaignInput, validateCampaignInput, wibDate } from '@/libs/campaign';
 import type { ActionResult } from '@/types/internal.types';
 import { orIlike } from '@/libs/pagination';
 import type { ActionResultWith, CampaignInput, CampaignRow, ChurchOption, PrizeInput } from '@/types/campaign.types';
@@ -174,6 +175,9 @@ async function updateCampaign(id: string, input: CampaignInput): Promise<ActionR
     .update({ ...data, ...(data.is_test ? {} : { sim_now: null }), updated_at: new Date().toISOString() })
     .eq('id', id);
   if (error) return { ok: false, error: error.message };
+  await removeUnreferencedAssets(
+    droppedAssetUrls([cur.theme.banner_url, cur.theme.hero_url], [data.theme.banner_url, data.theme.hero_url])
+  );
 
   revalidatePath('/campaigns');
   revalidatePath('/campaigns/[id]', 'layout');
@@ -317,7 +321,8 @@ const IMAGE_EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'p
 const IMAGE_KINDS = ['banner', 'hero', 'prize'];
 
 // Unique path + upsert:false (upsert would need a storage SELECT policy).
-// A replaced image stays in the bucket as an orphan — acceptable at this volume.
+// A replaced/cleared image is removed after the save once no row references it
+// (removeUnreferencedAssets); uploads never saved are left for the orphan script.
 export async function uploadCampaignImageAction(formData: FormData): Promise<ActionResultWith<{ url: string }>> {
   await requireInternalAdmin();
   const file = formData.get('file');
@@ -461,7 +466,7 @@ async function savePrize(campaignId: string, input: PrizeInput): Promise<ActionR
 
   if (input.id) {
     const { data: cur, error: cErr } = await db
-      .from('prizes').select('prize_type').eq('id', input.id).eq('campaign_id', campaignId).maybeSingle();
+      .from('prizes').select('prize_type, image_url').eq('id', input.id).eq('campaign_id', campaignId).maybeSingle();
     if (cErr) return { ok: false, error: cErr.message };
     if (!cur) return { ok: false, error: 'Hadiah tidak ditemukan.' };
     const winners = await prizeWinnerCount(input.id);
@@ -473,6 +478,7 @@ async function savePrize(campaignId: string, input: PrizeInput): Promise<ActionR
     }
     const { error } = await db.from('prizes').update(row).eq('id', input.id).eq('campaign_id', campaignId);
     if (error) return { ok: false, error: error.message };
+    await removeUnreferencedAssets(droppedAssetUrls([(cur as { image_url: string | null }).image_url], [row.image_url]));
   } else {
     const { error } = await db.from('prizes').insert({ ...row, campaign_id: campaignId });
     if (error) return { ok: false, error: error.message };
@@ -487,9 +493,14 @@ export async function deletePrizeAction(campaignId: string, prizeId: string): Pr
   try {
     if (!isUuid(campaignId) || !isUuid(prizeId)) return { ok: false, error: 'Hadiah tidak ditemukan.' };
     if ((await prizeWinnerCount(prizeId)) > 0) return { ok: false, error: WINNERS_BLOCK_DELETE };
+    // Read failure only skips the cleanup; it never blocks the delete.
+    const { data: prize } = await campaignDb()
+      .from('prizes').select('image_url').eq('id', prizeId).eq('campaign_id', campaignId).maybeSingle();
+    const imageUrl = (prize as { image_url: string | null } | null)?.image_url ?? null;
     const { error } = await campaignDb().from('prizes').delete().eq('id', prizeId).eq('campaign_id', campaignId);
     // 23503 = winners.prize_id FK (ON DELETE RESTRICT): a winner was drawn between the check and the delete.
     if (error) return { ok: false, error: error.code === '23503' ? WINNERS_BLOCK_DELETE : error.message };
+    await removeUnreferencedAssets(imageUrl ? [imageUrl] : []);
     revalidatePath('/campaigns/[id]', 'layout');
     return { ok: true };
   } catch (e) {

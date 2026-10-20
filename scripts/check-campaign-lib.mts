@@ -193,6 +193,18 @@ assert.equal(rpcErrorMessage('not_announce_mode'), 'Undi ulang hanya untuk campa
   assert.equal(assetObjectPath('https://x.supabase.co/storage/v1/object/public/avatars/a.jpg', P), null);
   assert.equal(assetObjectPath(`${P}c1/../avatars/a.jpg`, P), null);
   assert.equal(assetObjectPath(`${P}c1/a.jpg`, null), null);
+  // Hostile inputs: encoded traversal, hash dropped, lookalike hosts, other bucket with same prefix start
+  assert.equal(assetObjectPath(`${P}%2e%2e/avatars/a.jpg`, P), null);
+  assert.equal(assetObjectPath(`${P}c1/%2E%2E/a.jpg`, P), null);
+  assert.equal(assetObjectPath(`${P}c1/a%2fb.jpg`, P), null);
+  assert.equal(assetObjectPath(`${P}c1/a.jpg#frag`, P), 'c1/a.jpg');
+  assert.equal(assetObjectPath(`${P}c1/a.jpg#../../avatars/x`, P), null);
+  assert.equal(assetObjectPath('https://x.supabase.co.evil.example/storage/v1/object/public/campaign-assets/c1/a.jpg', P), null);
+  assert.equal(assetObjectPath('https://evil.example/https://x.supabase.co/storage/v1/object/public/campaign-assets/c1/a.jpg', P), null);
+  assert.equal(assetObjectPath('https://x.supabase.co@evil.example/storage/v1/object/public/campaign-assets/c1/a.jpg', P), null);
+  assert.equal(assetObjectPath('https://x.supabase.co/storage/v1/object/public/campaign-assets-x/c1/a.jpg', P), null);
+  assert.equal(assetObjectPath(`${P}?x=1`, P), null);
+  assert.equal(assetObjectPath(42, P), null);
   assert.deepEqual(droppedAssetUrls(['a', 'b', null, 'a'], ['b', null]), ['a']);
   assert.deepEqual(droppedAssetUrls([null, ''], []), []);
   assert.deepEqual(
