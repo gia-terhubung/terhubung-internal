@@ -581,6 +581,7 @@ const RPC_ERRORS: Record<string, string> = {
   invalid_reason: 'Pilih alasan undi ulang.',
   not_announce_mode: 'Undi ulang hanya untuk campaign mode pengumuman.',
   already_published: 'Pemenang sudah diumumkan. Undi ulang tidak bisa lagi.',
+  not_archived: 'Arsipkan campaign dulu sebelum menghapus permanen.',
 };
 
 /** Maps a plan 1 error code (exact, or embedded in the PostgREST message) to copy. */

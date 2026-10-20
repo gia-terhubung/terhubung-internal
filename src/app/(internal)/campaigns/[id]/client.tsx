@@ -7,7 +7,7 @@ import { CampaignSettingsForm } from '@/components/organisms/CampaignSettingsFor
 import { ChurchMultiSelect } from '@/components/organisms/ChurchMultiSelect.organism';
 import { TestToolsPanel } from '@/components/organisms/TestToolsPanel.organism';
 import { DuplicateCampaignModal } from '@/components/organisms/DuplicateCampaignModal.organism';
-import { setCampaignStatusAction } from '@/services/campaign.actions';
+import { purgeTestCampaignAction, setCampaignStatusAction } from '@/services/campaign.actions';
 import { toCampaignInput } from '@/libs/campaign';
 import type { CampaignDetail } from '@/types/campaign.types';
 
@@ -39,6 +39,8 @@ export function CampaignSettingsClient({ detail }: { detail: CampaignDetail }) {
   const c = detail.campaign;
   const [pending, setPending] = useState<StatusChange | null>(null);
   const [duplicating, setDuplicating] = useState(false);
+  const [purging, setPurging] = useState(false);
+  const [purgeName, setPurgeName] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   async function changeStatus(next: StatusChange) {
@@ -51,6 +53,21 @@ export function CampaignSettingsClient({ detail }: { detail: CampaignDetail }) {
       setError(e instanceof Error ? e.message : 'Gagal mengubah status.');
     } finally {
       setPending(null);
+    }
+  }
+
+  async function purge() {
+    setError(null);
+    try {
+      const res = await purgeTestCampaignAction(c.id, purgeName);
+      if (!res.ok) {
+        setPurging(false);
+        return setError(res.error);
+      }
+      router.push('/campaigns');
+    } catch (e) {
+      setPurging(false);
+      setError(e instanceof Error ? e.message : 'Gagal menghapus campaign.');
     }
   }
 
@@ -68,6 +85,14 @@ export function CampaignSettingsClient({ detail }: { detail: CampaignDetail }) {
         {c.status !== 'archived' && <button onClick={() => setPending('archived')} className={btn}>Arsipkan</button>}
         {c.status === 'archived' && <button onClick={() => setPending('draft')} className={btn}>Pulihkan ke draft</button>}
         <button onClick={() => setDuplicating(true)} className={btn}>Duplikat</button>
+        {c.is_test && c.status === 'archived' && (
+          <button
+            onClick={() => { setPurgeName(''); setPurging(true); }}
+            className="rounded-lg bg-danger px-3 py-1.5 text-sm font-bold text-white hover:bg-danger-hover"
+          >
+            Hapus permanen
+          </button>
+        )}
         {error && <p className="text-sm text-danger">{error}</p>}
       </div>
 
@@ -92,6 +117,32 @@ export function CampaignSettingsClient({ detail }: { detail: CampaignDetail }) {
           danger={CONFIRM[pending].danger}
           onConfirm={() => changeStatus(pending)}
           onClose={() => setPending(null)}
+        />
+      )}
+      {purging && (
+        <ConfirmDialog
+          title="Hapus permanen?"
+          message={
+            <div className="space-y-3">
+              <p>Campaign uji coba ini beserta semua data, pemenang, dan gambarnya dihapus permanen. Tidak bisa dibatalkan.</p>
+              <label className="block">
+                Ketik nama campaign untuk konfirmasi
+                <span className="mt-1 block font-mono text-text-primary">{c.name}</span>
+                <input
+                  type="text"
+                  value={purgeName}
+                  onChange={(e) => setPurgeName(e.target.value)}
+                  autoComplete="off"
+                  className="mt-1 w-full rounded-lg border border-border-color bg-bg-primary px-3 py-2 text-text-primary outline-none focus:border-brand"
+                />
+              </label>
+            </div>
+          }
+          confirmLabel="Hapus permanen"
+          danger
+          confirmDisabled={purgeName !== c.name}
+          onConfirm={purge}
+          onClose={() => setPurging(false)}
         />
       )}
       {duplicating && <DuplicateCampaignModal campaign={c} onClose={() => setDuplicating(false)} />}

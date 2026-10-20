@@ -9,6 +9,7 @@ export function ConfirmDialog({
   message,
   confirmLabel = 'Konfirmasi',
   danger = false,
+  confirmDisabled = false,
   onConfirm,
   onClose,
 }: {
@@ -16,6 +17,7 @@ export function ConfirmDialog({
   message: React.ReactNode;
   confirmLabel?: string;
   danger?: boolean;
+  confirmDisabled?: boolean;
   onConfirm: () => Promise<void>;
   onClose: () => void;
 }) {
@@ -47,7 +49,7 @@ export function ConfirmDialog({
           </button>
           <button
             onClick={confirm}
-            disabled={busy}
+            disabled={busy || confirmDisabled}
             className={`rounded-lg px-5 py-2 text-sm font-bold disabled:opacity-50 ${
               danger
                 ? 'bg-danger text-white hover:bg-danger-hover'

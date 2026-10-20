@@ -564,3 +564,27 @@ export async function resetTestAction(id: string): Promise<ActionResult> {
     return { ok: false, error: e instanceof Error ? e.message : 'Gagal mereset data.' };
   }
 }
+
+const PURGE_NOT_TEST = 'Hanya campaign uji coba yang bisa dihapus permanen.';
+
+// "Hapus permanen": archived TEST campaigns only. The typed name must match exactly.
+// Storage cleanup is best effort (removeUnreferencedAssets never throws); the client navigates to /campaigns.
+export async function purgeTestCampaignAction(campaignId: string, confirmName: string): Promise<ActionResult> {
+  await requireInternalAdmin();
+  try {
+    if (!isUuid(campaignId)) return { ok: false, error: 'Campaign tidak ditemukan.' };
+    const cur = await loadCampaign(campaignId);
+    if (!cur) return { ok: false, error: 'Campaign tidak ditemukan.' };
+    if (!cur.is_test) return { ok: false, error: PURGE_NOT_TEST };
+    if (cur.status !== 'archived') return { ok: false, error: rpcErrorMessage('not_archived') };
+    if (confirmName !== cur.name) return { ok: false, error: 'Nama campaign tidak cocok.' };
+    const { data, error } = await campaignDb().rpc('purge_test_campaign', { p_campaign: campaignId });
+    if (error) return { ok: false, error: error.message.includes('not_test') ? PURGE_NOT_TEST : rpcErrorMessage(error.message) };
+    const urls = (data as { asset_urls?: unknown } | null)?.asset_urls;
+    await removeUnreferencedAssets(Array.isArray(urls) ? urls.filter((u): u is string => typeof u === 'string') : []);
+    revalidatePath('/campaigns');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Gagal menghapus campaign.' };
+  }
+}
