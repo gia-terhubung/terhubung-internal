@@ -42,6 +42,7 @@ export function StageClient({ initial }: { initial: StageState }) {
   const queueRef = useRef<StageWinner[]>([]);
   const runningRef = useRef(false);
   const refreshingRef = useRef(false);
+  const pendingRef = useRef(false);
   const failuresRef = useRef(0);
   const reducedRef = useRef(false);
 
@@ -103,7 +104,10 @@ export function StageClient({ initial }: { initial: StageState }) {
   }, [reveal]);
 
   const refresh = useCallback(async () => {
-    if (refreshingRef.current) return;
+    if (refreshingRef.current) {
+      pendingRef.current = true;
+      return;
+    }
     refreshingRef.current = true;
     try {
       const next = await getStageStateAction(campaignId);
@@ -122,6 +126,10 @@ export function StageClient({ initial }: { initial: StageState }) {
       if (failuresRef.current >= 2) setOffline(true);
     } finally {
       refreshingRef.current = false;
+      if (pendingRef.current) {
+        pendingRef.current = false;
+        void refreshRef.current();
+      }
     }
   }, [campaignId, runQueue]);
 
@@ -190,7 +198,7 @@ export function StageClient({ initial }: { initial: StageState }) {
       <div className={styles.controls}>
         <button type="button" className={styles.fullscreenBtn} onClick={toggleTop} disabled={state.top.length === 0}
           title={state.top.length === 0 ? 'Muncul setelah peserta dibekukan' : 'Tombol T'}>
-          {state.top.length || state.topN} besar
+          {state.topN} besar
         </button>
         <button type="button" className={styles.fullscreenBtn} onClick={toggleFullscreen}>
           Layar penuh
@@ -217,7 +225,7 @@ export function StageClient({ initial }: { initial: StageState }) {
         {phase === 'top' && (
           <>
             <p className={styles.label}>Hadiah tetap · peringkat teratas semua gereja</p>
-            <h1 className={`${styles.display} ${styles.prizeName}`}>{state.top.length} besar</h1>
+            <h1 className={`${styles.display} ${styles.prizeName}`}>{state.topN} besar</h1>
             <ol className={styles.topList} style={{ gridTemplateRows: `repeat(${Math.ceil(state.top.length / 2)}, auto)` }}>
               {state.top.map((t, i) => (
                 <li key={t.rank} className={styles.topItem} style={{ animationDelay: `${(i + 1) * TOP_STEP_MS}ms` }}>

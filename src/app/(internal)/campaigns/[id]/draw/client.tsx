@@ -153,8 +153,8 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
         </div>
         {frozen && !hasWinners && pool.grand !== eligiblePreview && (
           <p className="mt-3 text-xs text-text-secondary">
-            Jumlah {topN} besar yang dibekukan berbeda dengan pratinjau saat ini. Wajar jika poin berubah setelah dibekukan;
-            bekukan ulang bila ingin memakai data terbaru.
+            Jumlah berbeda dari pratinjau saat ini — wajar jika ada pengecualian undian atau poin berubah setelah dibekukan.
+            Jangan bekukan ulang setelah mulai mengundi.
           </p>
         )}
       </section>
