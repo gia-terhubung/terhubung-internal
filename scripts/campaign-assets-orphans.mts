@@ -8,10 +8,11 @@
 //
 // Run from terhubung-internal/ (Node 23+, strips TS types natively):
 //   node --env-file=.env.local scripts/campaign-assets-orphans.mts            # dry run (default)
-//   node --env-file=.env.local scripts/campaign-assets-orphans.mts --delete   # remove the listed orphans
+//   node --env-file=.env.local scripts/campaign-assets-orphans.mts --delete   # list, then ask before removing exactly that list
 // Needs NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY. Points at PROD:
 // run the dry run first and review the list before passing --delete.
 
+import { createInterface } from 'node:readline/promises';
 import { createClient } from '@supabase/supabase-js';
 import { campaignAssetPrefix, unreferencedPaths } from '../src/libs/campaign.ts';
 
@@ -39,6 +40,14 @@ const db = admin.schema('campaign');
 
 interface Obj { path: string; created_at: string | null; size: number | null }
 
+// Unknown size → null (shown as "?"); a real 0-byte object stays 0.
+function sizeOf(metadata: Record<string, unknown> | null): number | null {
+  const v = metadata?.size;
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 async function listAll(folder: string): Promise<{ name: string; id: string | null; created_at: string | null; metadata: Record<string, unknown> | null }[]> {
   const out = [];
   for (let offset = 0; ; offset += PAGE) {
@@ -64,12 +73,15 @@ try {
   const objects: Obj[] = [];
   for (const top of await listAll('')) {
     if (top.id) {
-      objects.push({ path: top.name, created_at: top.created_at, size: Number(top.metadata?.size ?? NaN) || null });
+      objects.push({ path: top.name, created_at: top.created_at, size: sizeOf(top.metadata) });
       continue;
     }
     for (const f of await listAll(top.name)) {
-      if (!f.id) continue;
-      objects.push({ path: `${top.name}/${f.name}`, created_at: f.created_at, size: Number(f.metadata?.size ?? NaN) || null });
+      if (!f.id) {
+        console.error(`warning: skipped folder ${top.name}/${f.name}/ (deeper than 2 levels, not scanned)`);
+        continue;
+      }
+      objects.push({ path: `${top.name}/${f.name}`, created_at: f.created_at, size: sizeOf(f.metadata) });
     }
   }
 
@@ -99,7 +111,18 @@ try {
 
   if (!doDelete) {
     console.log('DRY RUN — pass --delete to remove');
-  } else {
+  } else if (orphans.length > 0) {
+    // Delete exactly the list printed above, only after an explicit "y".
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const answer = (await new Promise<string>((resolve) => {
+      rl.once('close', () => resolve('')); // EOF / Ctrl-D = no
+      rl.question(`Hapus ${orphans.length} objek? (y/N) `).then(resolve, () => resolve(''));
+    })).trim();
+    rl.close();
+    if (answer !== 'y' && answer !== 'Y') {
+      console.log('Dibatalkan — tidak ada yang dihapus.');
+      process.exit(0);
+    }
     let removed = 0;
     for (let i = 0; i < orphans.length; i += 100) {
       const chunk = orphans.slice(i, i + 100).map((o) => o.path);
