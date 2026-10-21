@@ -231,9 +231,9 @@ export function CampaignSettingsForm({
           ))}
           {mode === 'edit' && campaignId ? (
             <>
-              <ImageUploadField label="Banner" campaignId={campaignId} kind="banner" value={form.theme.banner_url}
+              <ImageUploadField label="Banner (rekomendasi 1200×300 px, 4:1)" campaignId={campaignId} kind="banner" value={form.theme.banner_url}
                 onChange={(url) => { setSaved(false); setForm((f) => ({ ...f, theme: { ...f.theme, banner_url: url } })); }} />
-              <ImageUploadField label="Gambar utama" campaignId={campaignId} kind="hero" value={form.theme.hero_url}
+              <ImageUploadField label="Gambar utama (rekomendasi 1600×900 px, 16:9)" campaignId={campaignId} kind="hero" value={form.theme.hero_url}
                 onChange={(url) => { setSaved(false); setForm((f) => ({ ...f, theme: { ...f.theme, hero_url: url } })); }} />
             </>
           ) : (
