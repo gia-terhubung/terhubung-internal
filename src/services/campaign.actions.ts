@@ -320,27 +320,38 @@ async function duplicateCampaign(id: string, newStartIso: string, userId: string
 const IMAGE_EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 const IMAGE_KINDS = ['banner', 'hero', 'prize'];
 
-// Unique path + upsert:false (upsert would need a storage SELECT policy).
-// A replaced/cleared image is removed after the save once no row references it
+// Fixed path per slot (banner.<ext>, hero.<ext>, prize-<prizeId>.<ext>) + upsert:true,
+// so a re-upload overwrites the live object immediately (service role bypasses
+// storage RLS, so upsert needs no SELECT policy). Same URL means app/CDN caches
+// may show the old image for a while (cacheControl 60s keeps it short). An image whose extension changed
+// or was cleared is removed after the save once no row references it
 // (removeUnreferencedAssets); uploads never saved are left for the orphan script.
 export async function uploadCampaignImageAction(formData: FormData): Promise<ActionResultWith<{ url: string }>> {
   await requireInternalAdmin();
   const file = formData.get('file');
   const campaignId = String(formData.get('campaignId') ?? '');
   const kind = String(formData.get('kind') ?? '');
+  const prizeId = String(formData.get('prizeId') ?? '');
   if (!(file instanceof File)) return { ok: false, error: 'File tidak ditemukan.' };
   if (!IMAGE_KINDS.includes(kind)) return { ok: false, error: 'Jenis gambar tidak dikenal.' };
   const ext = IMAGE_EXT[file.type];
   if (!ext) return { ok: false, error: 'Format gambar harus JPG, PNG, atau WebP.' };
   if (file.size > 3 * 1024 * 1024) return { ok: false, error: 'Ukuran gambar maksimal 3 MB.' };
   if (!(await loadCampaign(campaignId))) return { ok: false, error: 'Campaign tidak ditemukan.' };
+  if (kind === 'prize') {
+    if (!isUuid(prizeId)) return { ok: false, error: 'Simpan hadiah dulu sebelum mengunggah foto.' };
+    const { data: prize, error: pErr } = await campaignDb()
+      .from('prizes').select('id').eq('id', prizeId).eq('campaign_id', campaignId).maybeSingle();
+    if (pErr) return { ok: false, error: pErr.message };
+    if (!prize) return { ok: false, error: 'Hadiah tidak ditemukan.' };
+  }
 
-  const path = `${campaignId}/${kind}-${crypto.randomUUID()}.${ext}`;
+  const path = `${campaignId}/${kind === 'prize' ? `prize-${prizeId}` : kind}.${ext}`;
   if (campaignAssetPrefix(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '') === null) {
     return { ok: false, error: 'Konfigurasi storage belum lengkap.' };
   }
   const storage = createAdminClient().storage.from('campaign-assets');
-  const { error } = await storage.upload(path, file, { contentType: file.type, upsert: false });
+  const { error } = await storage.upload(path, file, { contentType: file.type, upsert: true, cacheControl: '60' });
   if (error) return { ok: false, error: error.message };
   return { ok: true, data: { url: storage.getPublicUrl(path).data.publicUrl } };
 }

@@ -85,7 +85,7 @@ export function PrizeModal({
               <input type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: Number(e.target.value) })} className={inputCls} />
             </label>
           </div>
-          <ImageUploadField label="Foto hadiah" campaignId={campaignId} kind="prize" value={form.image_url}
+          <ImageUploadField label="Foto hadiah" campaignId={campaignId} kind="prize" prizeId={prize?.id} value={form.image_url}
             onChange={(url) => setForm((f) => ({ ...f, image_url: url }))} />
           {prize && prize.winner_count > 0 && (
             <p className="text-xs text-text-secondary">
