@@ -66,6 +66,8 @@
   gap: 2.2vh;
   padding: 18vh 6vw 4vh;
   text-align: center;
+  /* globals.css offsets every `body main` for the sidebar; the stage has none. */
+  margin-left: 0 !important;
 }
 
 .display {
