@@ -14,7 +14,7 @@ export default async function NewCampaignPage() {
       <CampaignSettingsForm
         mode="create"
         initial={initial}
-        locks={{ start: false, close: false, draw: false, isTest: false, topN: false, drawMode: false }}
+        locks={{ start: false, close: false, draw: false, isTest: false, topN: false, drawMode: false, grandWeight: false }}
         assignedWeeks={[]}
         dailyDates={[]}
       />

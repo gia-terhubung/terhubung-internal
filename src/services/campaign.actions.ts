@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
 import { removeUnreferencedAssets } from '@/services/campaignAssets.service';
-import { DEFAULT_RULES, addDays, droppedAssetUrls, drawAtLocked, drawModeOf, campaignAssetPrefix, diffDays, isUuid, rpcErrorMessage, sanitizeAssetUrl, sanitizeCampaignInput, validateCampaignInput, wibDate } from '@/libs/campaign';
+import { DEFAULT_RULES, addDays, droppedAssetUrls, drawAtLocked, drawModeOf, grandTopWeightOf, campaignAssetPrefix, diffDays, isUuid, rpcErrorMessage, sanitizeAssetUrl, sanitizeCampaignInput, validateCampaignInput, wibDate } from '@/libs/campaign';
 import type { ActionResult } from '@/types/internal.types';
 import { orIlike } from '@/libs/pagination';
 import type { ActionResultWith, CampaignInput, CampaignRow, ChurchOption, PrizeInput } from '@/types/campaign.types';
@@ -164,6 +164,10 @@ async function updateCampaign(id: string, input: CampaignInput): Promise<ActionR
   // The DB does not guard draw_mode; this is the only guard. Also refuse once any winner exists.
   if ((cur.frozen_at || drawn) && drawModeOf(data.rules) !== drawModeOf(cur.rules)) {
     return { ok: false, error: 'Mode undian terkunci setelah peserta dibekukan.' };
+  }
+  // Legacy frozen campaign: null === null, so it still saves. Mode + multiplier are frozen with the pool.
+  if (cur.frozen_at && grandTopWeightOf(data.rules) !== grandTopWeightOf(cur.rules)) {
+    return { ok: false, error: 'Cara undian hadiah utama terkunci setelah peserta dibekukan.' };
   }
   if (cur.status === 'published') {
     const overlap = await overlapError(id, await churchIdsOf(id), data.start_at, data.draw_at);

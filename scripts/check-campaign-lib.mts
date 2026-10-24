@@ -7,7 +7,7 @@ import {
   campaignDays, computeStatus, isoToWibInput, parseCsv, parseQuestionCsv, rpcErrorMessage,
   countableWeeks, lastDay, resolveRequirements, toCsv, totalDays, validateCampaignInput, weekNo, weekRange, wibDate,
   wibInputToIso, isUuid, campaignAssetPrefix, sanitizeAssetUrl, sanitizeCampaignInput, slotOutOfPeriod,
-  drawModeOf, isPrePublish, drawAtLocked, statusLabel,
+  drawModeOf, grandTopWeightOf, GRAND_TOP_WEIGHT_DEFAULT, defaultCampaignInput, isPrePublish, drawAtLocked, statusLabel,
   assetObjectPath, droppedAssetUrls, unreferencedPaths,
 } from '../src/libs/campaign.ts';
 
@@ -212,6 +212,30 @@ assert.equal(rpcErrorMessage('not_announce_mode'), 'Undi ulang hanya untuk campa
     ['c1/b.jpg'],
   );
   assert.deepEqual(unreferencedPaths(['c1/a.jpg'], [], null), []);
+}
+
+// L-W1..5 grand_top_weight (absent = legacy grand-from-top-N; 1–5 = whole congregation)
+{
+  assert.equal(grandTopWeightOf({}), null);
+  assert.equal(grandTopWeightOf(null), null);
+  assert.equal(grandTopWeightOf({ grand_top_weight: 3 }), 3);
+  assert.equal(grandTopWeightOf({ grand_top_weight: 9 }), 5);
+  assert.equal(grandTopWeightOf({ grand_top_weight: 0 }), 1);
+  assert.equal(grandTopWeightOf({ grand_top_weight: '3' }), null);
+  assert.equal(GRAND_TOP_WEIGHT_DEFAULT, 3);
+  assert.equal(defaultCampaignInput(Date.parse('2026-10-24T00:00:00Z')).rules.grand_top_weight, 3);
+  assert.equal('grand_top_weight' in DEFAULT_RULES, false);
+  const base = defaultCampaignInput(Date.parse('2026-10-24T00:00:00Z'));
+  const withRules = (r: Record<string, unknown>) => ({ ...base, name: 'Natal', rules: { ...DEFAULT_RULES, ...r } }) as never;
+  assert.equal('grand_top_weight' in sanitizeCampaignInput(withRules({}), null).rules, false);
+  assert.equal(sanitizeCampaignInput(withRules({ grand_top_weight: 2 }), null).rules.grand_top_weight, 2);
+  assert.ok(Number.isNaN(sanitizeCampaignInput(withRules({ grand_top_weight: 'x' }), null).rules.grand_top_weight));
+  assert.equal(typeof validateCampaignInput(sanitizeCampaignInput(withRules({ grand_top_weight: 'x' }), null)), 'string');
+  assert.equal(validateCampaignInput(sanitizeCampaignInput(withRules({}), null)), null);
+  for (const ok of [1, 2, 3, 4, 5]) assert.equal(validateCampaignInput(sanitizeCampaignInput(withRules({ grand_top_weight: ok }), null)), null);
+  for (const bad of [6, 0, 1.5]) {
+    assert.equal(validateCampaignInput(sanitizeCampaignInput(withRules({ grand_top_weight: bad }), null)), 'Kelipatan kesempatan 10 besar harus 1–5.');
+  }
 }
 
 console.log('check-campaign-lib: all assertions passed');

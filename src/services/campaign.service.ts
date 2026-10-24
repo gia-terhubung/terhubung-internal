@@ -92,6 +92,7 @@ export const getCampaignDetail = cache(async (id: string): Promise<CampaignDetai
       isTest: campaign.status !== 'draft',
       topN: campaign.frozen_at !== null,
       drawMode: campaign.frozen_at !== null || hasWinners,
+      grandWeight: campaign.frozen_at !== null,
     },
   };
 });

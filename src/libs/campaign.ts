@@ -67,8 +67,18 @@ export const ANNOUNCE_HANDOVER_NOTE = 'Tim Terhubung akan menghubungi pemenang u
 // next store release after 1.2.0 (currently 1.2.1 — confirm at ship)
 export const ANNOUNCE_MIN_APP_VERSION = '1.2.1';
 
+/** Default multiplier for new campaigns (not in DEFAULT_RULES: an absent key means legacy grand-from-top-N). */
+export const GRAND_TOP_WEIGHT_DEFAULT = 3;
+
+/** Mirrors SQL campaign.grand_top_weight(jsonb): non-number -> null, else round and clamp to 1–5. */
+export function grandTopWeightOf(rules: { grand_top_weight?: unknown } | null | undefined): number | null {
+  const v = rules?.grand_top_weight;
+  if (typeof v !== 'number' || Number.isNaN(v)) return null;
+  return Math.min(5, Math.max(1, Math.round(v)));
+}
+
 export interface RuleField {
-  key: Exclude<keyof CampaignRules, 'draw_mode'>;
+  key: Exclude<keyof CampaignRules, 'draw_mode' | 'grand_top_weight'>;
   label: string;
   group: 'points' | 'timers' | 'grand';
   min: number;
@@ -261,7 +271,7 @@ export function defaultCampaignInput(nowMs: number): CampaignInput {
     theme: { ...DEFAULT_THEME, colors: { ...DEFAULT_THEME.colors } },
     venue: { ...DEFAULT_VENUE },
     modules: { ...DEFAULT_MODULES },
-    rules: { ...DEFAULT_RULES },
+    rules: { ...DEFAULT_RULES, grand_top_weight: GRAND_TOP_WEIGHT_DEFAULT },
   };
 }
 
@@ -300,6 +310,10 @@ export function validateCampaignInput(i: CampaignInput): string | null {
   if (!(c <= d)) return 'Tanggal undian tidak boleh sebelum tanggal tutup.';
   const mode = (i.rules as unknown as { draw_mode?: unknown }).draw_mode;
   if (mode !== 'live' && mode !== 'announce') return 'Mode undian tidak valid.';
+  const w = (i.rules as unknown as { grand_top_weight?: unknown }).grand_top_weight;
+  if (w !== undefined && (!Number.isInteger(w) || (w as number) < 1 || (w as number) > 5)) {
+    return `Kelipatan kesempatan ${i.rules.grand_top_n} besar harus 1–5.`;
+  }
   for (const f of RULE_FIELDS) {
     const v = i.rules[f.key];
     if (!Number.isInteger(v) || v < f.min || v > f.max) return `${f.label}: isi angka bulat ${f.min}–${f.max}.`;
@@ -389,6 +403,10 @@ export function sanitizeCampaignInput(i: CampaignInput, assetPrefix: string | nu
     rules[f.key] = typeof v === 'number' ? v : Number.NaN;
   }
   rules.draw_mode = drawModeOf(i.rules);
+  const rawRules = i.rules as unknown as Record<string, unknown> | undefined;
+  if (rawRules && Object.hasOwn(rawRules, 'grand_top_weight') && rawRules.grand_top_weight !== undefined) {
+    rules.grand_top_weight = typeof rawRules.grand_top_weight === 'number' ? rawRules.grand_top_weight : Number.NaN;
+  }
   const modules = { ...DEFAULT_MODULES };
   for (const k of Object.keys(DEFAULT_MODULES) as (keyof CampaignModules)[]) {
     const v = (i.modules as unknown as Record<string, unknown> | undefined)?.[k];
