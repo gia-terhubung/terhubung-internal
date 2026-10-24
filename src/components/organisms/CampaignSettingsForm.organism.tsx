@@ -82,6 +82,8 @@ export function CampaignSettingsForm({
 
   const announce = form.rules.draw_mode === 'announce';
   const grandWeight = grandTopWeightOf(form.rules);
+  // Mode follows key presence, not the value: a cleared (NaN) multiplier must keep the weighted controls mounted.
+  const weighted = form.rules.grand_top_weight !== undefined;
   function setGrandMode(next: 'top' | 'all') {
     // 'top' must drop the key entirely (absent = legacy), never write undefined/null.
     const { grand_top_weight, ...rest } = form.rules;
@@ -293,7 +295,7 @@ export function CampaignSettingsForm({
           <label className="block">
             <span className={labelCls}>Hadiah utama diundi dari</span>
             <select
-              value={grandWeight === null ? 'top' : 'all'}
+              value={weighted ? 'all' : 'top'}
               disabled={locks.grandWeight}
               onChange={(e) => setGrandMode(e.target.value as 'top' | 'all')}
               className={inputCls}
@@ -303,7 +305,7 @@ export function CampaignSettingsForm({
             </select>
             {locks.grandWeight && <span className="mt-1 block text-xs text-text-secondary">Terkunci: peserta sudah dibekukan.</span>}
           </label>
-          {grandWeight !== null && (
+          {weighted && (
             <label className="block">
               <span className={labelCls}>{`Kelipatan kesempatan ${form.rules.grand_top_n} besar (×)`}</span>
               <input
@@ -320,7 +322,7 @@ export function CampaignSettingsForm({
             </label>
           )}
         </div>
-        {grandWeight !== null && (
+        {weighted && (
           <p className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-text-primary">
             {`Aplikasi versi lama masih menulis hadiah utama diundi dari ${form.rules.grand_top_n} besar. Naikkan versi minimum di App Config ke versi aplikasi yang baru sebelum campaign dimulai.`}
           </p>
@@ -329,9 +331,9 @@ export function CampaignSettingsForm({
           {req ? (
             <ul className="space-y-1">
               <li>Peringkat 1–<b>{form.rules.grand_top_n}</b> dari semua gereja mendapat hadiah tetap (tidak diundi).</li>
-              {grandWeight !== null ? (
+              {weighted ? (
                 <li>
-                  Hadiah utama diundi dari semua jemaat terdaftar (termasuk tanpa aplikasi). Peringkat 1–{form.rules.grand_top_n} punya {grandWeight}× kesempatan.
+                  Hadiah utama diundi dari semua jemaat terdaftar (termasuk tanpa aplikasi). Peringkat 1–{form.rules.grand_top_n} punya {grandWeight ?? '?'}× kesempatan.
                 </li>
               ) : (
                 <li>Hadiah utama diundi dari {form.rules.grand_top_n} besar itu.</li>

@@ -14,12 +14,14 @@ export function PrizeModal({
   prize,
   nextSortOrder,
   topN,
+  grandTopWeight,
   onClose,
 }: {
   campaignId: string;
   prize: PrizeRow | null; // null = create
   nextSortOrder: number;
   topN: number; // rules.grand_top_n: default quantity of a new 'top' prize
+  grandTopWeight: number | null; // rules.grand_top_weight: null = grand drawn from top N only
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -67,7 +69,11 @@ export function PrizeModal({
               className={inputCls}
             >
               <option value="normal">Hadiah reguler — diundi dari semua jemaat gereja peserta</option>
-              <option value="grand">Hadiah utama — diundi dari {topN} besar</option>
+              <option value="grand">
+                {grandTopWeight !== null
+                  ? `Hadiah utama — diundi dari semua jemaat (${topN} besar ${grandTopWeight}× kesempatan)`
+                  : `Hadiah utama — diundi dari ${topN} besar`}
+              </option>
               <option value="top">Hadiah tetap ({topN} besar) — tidak diundi</option>
             </select>
           </label>

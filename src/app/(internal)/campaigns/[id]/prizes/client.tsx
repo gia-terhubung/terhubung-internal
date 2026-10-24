@@ -94,6 +94,7 @@ export function PrizesClient({
           prize={editing}
           nextSortOrder={prizes.length + 1}
           topN={topN}
+          grandTopWeight={grandTopWeight}
           onClose={() => setEditing(undefined)}
         />
       )}
