@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createCampaignAction, updateCampaignAction } from '@/services/campaign.actions';
 import { ImageUploadField } from '@/components/molecules/ImageUploadField.molecule';
 import {
-  ANNOUNCE_MIN_APP_VERSION, RULE_FIELDS, formatLongDay, isoToWibInput, lastDay, resolveRequirements, validateCampaignInput, weekRange, wibInputToIso,
+  ANNOUNCE_MIN_APP_VERSION, GRAND_TOP_WEIGHT_DEFAULT, RULE_FIELDS, formatLongDay, grandTopWeightOf, isoToWibInput, lastDay, resolveRequirements, validateCampaignInput, weekRange, wibInputToIso,
   type RuleField,
 } from '@/libs/campaign';
 import type { CampaignInput, CampaignLocks, CampaignModules, DrawMode } from '@/types/campaign.types';
@@ -81,6 +81,13 @@ export function CampaignSettingsForm({
   const setRule = (k: RuleField['key'], v: number) => patch({ rules: { ...form.rules, [k]: v } });
 
   const announce = form.rules.draw_mode === 'announce';
+  const grandWeight = grandTopWeightOf(form.rules);
+  function setGrandMode(next: 'top' | 'all') {
+    // 'top' must drop the key entirely (absent = legacy), never write undefined/null.
+    const { grand_top_weight, ...rest } = form.rules;
+    void grand_top_weight;
+    patch({ rules: next === 'all' ? { ...rest, grand_top_weight: GRAND_TOP_WEIGHT_DEFAULT } : rest });
+  }
   const clientError = validateCampaignInput(form);
   const req = useMemo(
     () => (clientError === null ? resolveRequirements(form.start_at, form.close_at, assignedWeeks) : null),
@@ -282,11 +289,53 @@ export function CampaignSettingsForm({
         hint="Peringkat dihitung dari total poin di semua gereja peserta. Poin sama: yang lebih banyak hari check-in di atas, lalu yang lebih dulu mencapai poinnya."
       >
         {ruleInputs('grand')}
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <label className="block">
+            <span className={labelCls}>Hadiah utama diundi dari</span>
+            <select
+              value={grandWeight === null ? 'top' : 'all'}
+              disabled={locks.grandWeight}
+              onChange={(e) => setGrandMode(e.target.value as 'top' | 'all')}
+              className={inputCls}
+            >
+              <option value="top">{`${form.rules.grand_top_n} besar saja`}</option>
+              <option value="all">Semua jemaat terdaftar</option>
+            </select>
+            {locks.grandWeight && <span className="mt-1 block text-xs text-text-secondary">Terkunci: peserta sudah dibekukan.</span>}
+          </label>
+          {grandWeight !== null && (
+            <label className="block">
+              <span className={labelCls}>{`Kelipatan kesempatan ${form.rules.grand_top_n} besar (×)`}</span>
+              <input
+                type="number"
+                min={1}
+                max={5}
+                step={1}
+                value={Number.isNaN(form.rules.grand_top_weight) ? '' : form.rules.grand_top_weight}
+                onChange={(e) => patch({ rules: { ...form.rules, grand_top_weight: e.target.value === '' ? NaN : Number(e.target.value) } })}
+                disabled={locks.grandWeight}
+                className={inputCls}
+              />
+              {locks.grandWeight && <span className="mt-1 block text-xs text-text-secondary">Terkunci: peserta sudah dibekukan.</span>}
+            </label>
+          )}
+        </div>
+        {grandWeight !== null && (
+          <p className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-text-primary">
+            {`Aplikasi versi lama masih menulis hadiah utama diundi dari ${form.rules.grand_top_n} besar. Naikkan versi minimum di App Config ke versi aplikasi yang baru sebelum campaign dimulai.`}
+          </p>
+        )}
         <div className="mt-4 rounded-lg bg-bg-primary p-4 text-sm text-text-primary">
           {req ? (
             <ul className="space-y-1">
               <li>Peringkat 1–<b>{form.rules.grand_top_n}</b> dari semua gereja mendapat hadiah tetap (tidak diundi).</li>
-              <li>Hadiah utama diundi dari {form.rules.grand_top_n} besar itu.</li>
+              {grandWeight !== null ? (
+                <li>
+                  Hadiah utama diundi dari semua jemaat terdaftar (termasuk tanpa aplikasi). Peringkat 1–{form.rules.grand_top_n} punya {grandWeight}× kesempatan.
+                </li>
+              ) : (
+                <li>Hadiah utama diundi dari {form.rules.grand_top_n} besar itu.</li>
+              )}
               <li>Hadiah reguler diundi dari semua jemaat terdaftar (termasuk tanpa aplikasi dan {form.rules.grand_top_n} besar).</li>
               <li>
                 Periode {req.days} hari, hari terakhir {formatLongDay(req.lastDay)}. Kuis mingguan: {req.weeksAssigned} minggu sudah diisi soal

@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getCampaignDetail, getMonitor, listDrawExclusions } from '@/services/campaign.service';
+import { grandTopWeightOf } from '@/libs/campaign';
 import { MonitorClient } from './client';
 
 export default async function MonitorPage({
@@ -23,7 +24,7 @@ export default async function MonitorPage({
   ]);
   return (
     <MonitorClient campaignId={id} churches={detail.churches} data={data} church={church} search={search}
-      topN={detail.campaign.rules.grand_top_n} frozen={detail.campaign.frozen_at !== null}
+      topN={detail.campaign.rules.grand_top_n} grandTopWeight={grandTopWeightOf(detail.campaign.rules)} frozen={detail.campaign.frozen_at !== null}
       exclusions={exclusions} />
   );
 }

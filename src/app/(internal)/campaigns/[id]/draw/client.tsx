@@ -38,7 +38,7 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
   }, []);
 
   // Never cache quantities: everything below comes from the latest server read.
-  const { campaign, pool, poolLeft, eligiblePreview, prizes, winners, top, topN, topFrozen } = state;
+  const { campaign, pool, poolLeft, eligiblePreview, prizes, winners, top, topN, grandTopWeight, topFrozen } = state;
   const frozen = campaign.frozen_at !== null;
   const hasWinners = winners.length > 0;
   const announce = campaign.draw_mode === 'announce';
@@ -130,7 +130,7 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
       const res = await freezePoolAction(campaign.id);
       if (res.ok) {
         setNotice(
-          `Peserta dibekukan: ${formatCount(res.normal)} untuk hadiah reguler (termasuk tanpa aplikasi), ${formatCount(res.grand)} (${state.topN} besar) untuk hadiah utama.`
+          `Peserta dibekukan: ${formatCount(res.normal)} untuk hadiah reguler (termasuk tanpa aplikasi), ${formatCount(res.grand)} ${state.grandTopWeight !== null ? `(semua jemaat, ${state.topN} besar ${state.grandTopWeight}×)` : `(${state.topN} besar)`} untuk hadiah utama.`
         );
         router.refresh();
       } else {
@@ -213,7 +213,7 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
               <div className="text-xs text-text-secondary">Jemaat terdaftar, termasuk tanpa aplikasi</div>
             </div>
             <div>
-              <div className="text-sm text-text-secondary">Peserta hadiah utama ({topN} besar)</div>
+              <div className="text-sm text-text-secondary">{grandTopWeight !== null ? 'Peserta hadiah utama (semua jemaat)' : `Peserta hadiah utama (${topN} besar)`}</div>
               <div className="text-2xl font-bold text-text-primary">{formatCount(pool.grand)}</div>
               <div className="text-xs text-text-secondary">
                 {topN} besar saat ini: {formatCount(eligiblePreview)}
@@ -236,7 +236,7 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
             </button>
           </div>
         </div>
-        {frozen && !hasWinners && pool.grand !== eligiblePreview && (
+        {grandTopWeight === null && frozen && !hasWinners && pool.grand !== eligiblePreview && (
           <p className="mt-3 text-xs text-text-secondary">
             Jumlah berbeda dari pratinjau saat ini — wajar jika ada pengecualian undian atau poin berubah setelah dibekukan.
             Jangan bekukan ulang setelah mulai mengundi.
@@ -280,7 +280,9 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
           {topN} besar (hadiah tetap) {topFrozen ? <Badge variant="primary">Dibekukan</Badge> : <Badge variant="outline">Sementara</Badge>}
         </h2>
         <p className="border-b border-border-color px-4 py-2 text-xs text-text-secondary">
-          Tidak diundi: semuanya dapat hadiah tetap. Hadiah utama diundi dari daftar ini.
+          {grandTopWeight !== null
+            ? `Tidak diundi: semuanya dapat hadiah tetap. Mereka punya ${grandTopWeight}× kesempatan di undian hadiah utama.`
+            : 'Tidak diundi: semuanya dapat hadiah tetap. Hadiah utama diundi dari daftar ini.'}
         </p>
         <ol className="grid grid-cols-1 divide-y divide-border-color md:grid-cols-2 md:divide-y-0">
           {top.map((t) => (
@@ -312,7 +314,7 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
           )}
         </div>
         <p className="border-b border-border-color px-4 py-2 text-xs text-text-secondary">
-          Belum menang: {formatCount(poolLeft.normal)} peserta hadiah reguler, {formatCount(poolLeft.grand)} dari {topN} besar untuk hadiah utama.
+          Belum menang: {formatCount(poolLeft.normal)} peserta hadiah reguler, {grandTopWeight !== null ? `${formatCount(poolLeft.grand)} peserta` : `${formatCount(poolLeft.grand)} dari ${topN} besar`} untuk hadiah utama.
           Jumlah hadiah diambil ulang setiap selesai mengundi; klik &quot;Muat ulang&quot; setelah mengubah jumlah hadiah.
         </p>
         <ul>

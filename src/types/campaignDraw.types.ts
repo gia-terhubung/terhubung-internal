@@ -54,6 +54,8 @@ export interface DrawConsoleState {
   campaign: DrawConsoleCampaign;
   /** rules.grand_top_n */
   topN: number;
+  /** rules.grand_top_weight: null = legacy (grand drawn from top N only), 1–5 = whole congregation, top N weighted */
+  grandTopWeight: number | null;
   /** campaign.admin_top: frozen list after freeze (topFrozen = frozen_at set), live preview before. */
   top: DrawTopRow[];
   topFrozen: boolean;

@@ -1,7 +1,7 @@
 import 'server-only';
 import { requireInternalAdmin } from '@/services/auth.service';
 import { createAdminClient } from '@/libs/supabase/admin';
-import { DEFAULT_THEME, drawModeOf, isUuid } from '@/libs/campaign';
+import { DEFAULT_THEME, drawModeOf, grandTopWeightOf, isUuid } from '@/libs/campaign';
 import { orderPrizesForDraw, poolLeftByType } from '@/libs/campaignDraw';
 import { getTop } from '@/services/campaign.service';
 import type {
@@ -112,7 +112,7 @@ export async function getDrawConsoleState(campaignId: string): Promise<DrawConso
   const { rules, ...campaignRow } = campaign as Omit<DrawConsoleState['campaign'], 'close_at' | 'draw_at' | 'draw_mode'> & {
     close_at: string;
     draw_at: string;
-    rules: { grand_top_n?: number; draw_mode?: unknown } | null;
+    rules: { grand_top_n?: number; draw_mode?: unknown; grand_top_weight?: unknown } | null;
   };
 
   return {
@@ -123,6 +123,7 @@ export async function getDrawConsoleState(campaignId: string): Promise<DrawConso
       draw_mode: drawModeOf(rules),
     },
     topN: rules?.grand_top_n ?? 10,
+    grandTopWeight: grandTopWeightOf(rules),
     top: top.map((t) => ({
       rank: t.rank, full_name: t.full_name, display_name: t.display_name, church_name: t.church_name, points: t.points,
     })),

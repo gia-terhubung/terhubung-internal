@@ -11,9 +11,9 @@ import { PAGE_SIZE } from '@/libs/pagination';
 import type { ChurchOption, DrawExclusionRow, MonitorData, ParticipantRow } from '@/types/campaign.types';
 
 export function MonitorClient({
-  campaignId, churches, data, church, search, topN, frozen, exclusions,
+  campaignId, churches, data, church, search, topN, grandTopWeight, frozen, exclusions,
 }: {
-  campaignId: string; churches: ChurchOption[]; data: MonitorData; church: string; search: string; topN: number; frozen: boolean; exclusions: DrawExclusionRow[];
+  campaignId: string; churches: ChurchOption[]; data: MonitorData; church: string; search: string; topN: number; grandTopWeight: number | null; frozen: boolean; exclusions: DrawExclusionRow[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -39,7 +39,7 @@ export function MonitorClient({
 
   return (
     <div className="space-y-6">
-      {data.grandQuantity > data.top.length && (
+      {grandTopWeight === null && data.grandQuantity > data.top.length && (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-text-primary">
           Hadiah utama diundi dari {topN} besar. Jumlah hadiah utama ({data.grandQuantity}) lebih banyak dari peserta {topN} besar
           saat ini ({data.top.length}); sisa hadiah tidak bisa diundi. Kurangi jumlah hadiah utama sebelum undian.
@@ -61,7 +61,7 @@ export function MonitorClient({
       </div>
       <p className="text-xs text-text-secondary">
         Undian hadiah reguler memakai semua jemaat terdaftar (termasuk tanpa aplikasi); jumlah pastinya muncul di konsol undian
-        setelah peserta dibekukan. {topN} besar dan hadiah utama hanya untuk pengguna aplikasi.
+        setelah peserta dibekukan.{grandTopWeight === null && ` ${topN} besar dan hadiah utama hanya untuk pengguna aplikasi.`}
       </p>
 
       <section className="overflow-hidden rounded-xl border border-border-color bg-bg-secondary">

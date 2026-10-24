@@ -7,19 +7,19 @@ import { PrizeModal } from '@/components/organisms/PrizeModal.organism';
 import { deletePrizeAction } from '@/services/campaign.actions';
 import type { DrawMode, PrizeRow, PrizeType } from '@/types/campaign.types';
 
-function groups(topN: number, drawMode: DrawMode): { type: PrizeType; title: string; hint: string }[] {
+function groups(topN: number, grandTopWeight: number | null, drawMode: DrawMode): { type: PrizeType; title: string; hint: string }[] {
   const handover = drawMode === 'announce' ? 'Tim Terhubung akan menghubungi penerima.' : 'diserahkan di lokasi acara.';
   return [
     { type: 'top', title: `Hadiah tetap (${topN} besar)`, hint: `Tidak diundi. Untuk peringkat 1–${topN} dari semua gereja, ${handover}` },
     { type: 'normal', title: 'Hadiah reguler', hint: `Diundi lebih dulu dari semua jemaat gereja peserta, termasuk yang tanpa aplikasi dan ${topN} besar.` },
-    { type: 'grand', title: 'Hadiah utama', hint: `Diundi terakhir dari ${topN} besar.` },
+    { type: 'grand', title: 'Hadiah utama', hint: grandTopWeight !== null ? `Diundi terakhir dari semua jemaat (${topN} besar ${grandTopWeight}× kesempatan).` : `Diundi terakhir dari ${topN} besar.` },
   ];
 }
 
 export function PrizesClient({
-  campaignId, prizes, topN, drawMode,
+  campaignId, prizes, topN, grandTopWeight, drawMode,
 }: {
-  campaignId: string; prizes: PrizeRow[]; topN: number; drawMode: DrawMode;
+  campaignId: string; prizes: PrizeRow[]; topN: number; grandTopWeight: number | null; drawMode: DrawMode;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<PrizeRow | null | undefined>(undefined); // undefined = closed, null = create
@@ -51,7 +51,7 @@ export function PrizesClient({
       </div>
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      {groups(topN, drawMode).map((g) => {
+      {groups(topN, grandTopWeight, drawMode).map((g) => {
         const rows = prizes.filter((p) => p.prize_type === g.type);
         return (
           <section key={g.type} className="rounded-xl border border-border-color bg-bg-secondary p-5">
