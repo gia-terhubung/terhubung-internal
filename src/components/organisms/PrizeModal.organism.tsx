@@ -71,7 +71,9 @@ export function PrizeModal({
               <option value="normal">Hadiah reguler — diundi dari semua jemaat gereja peserta</option>
               <option value="grand">
                 {grandTopWeight !== null
-                  ? `Hadiah utama — diundi dari semua jemaat (${topN} besar ${grandTopWeight}× kesempatan)`
+                  ? grandTopWeight > 1
+                    ? `Hadiah utama — diundi dari semua jemaat (${topN} besar ${grandTopWeight}× kesempatan)`
+                    : 'Hadiah utama — diundi dari semua jemaat'
                   : `Hadiah utama — diundi dari ${topN} besar`}
               </option>
               <option value="top">Hadiah tetap ({topN} besar) — tidak diundi</option>

@@ -130,7 +130,7 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
       const res = await freezePoolAction(campaign.id);
       if (res.ok) {
         setNotice(
-          `Peserta dibekukan: ${formatCount(res.normal)} untuk hadiah reguler (termasuk tanpa aplikasi), ${formatCount(res.grand)} ${state.grandTopWeight !== null ? `(semua jemaat, ${state.topN} besar ${state.grandTopWeight}×)` : `(${state.topN} besar)`} untuk hadiah utama.`
+          `Peserta dibekukan: ${formatCount(res.normal)} untuk hadiah reguler (termasuk tanpa aplikasi), ${formatCount(res.grand)} ${state.grandTopWeight !== null ? (state.grandTopWeight > 1 ? `(semua jemaat, ${state.topN} besar ${state.grandTopWeight}×)` : '(semua jemaat)') : `(${state.topN} besar)`} untuk hadiah utama.`
         );
         router.refresh();
       } else {
@@ -281,7 +281,9 @@ export function DrawConsoleClient({ state }: { state: DrawConsoleState }) {
         </h2>
         <p className="border-b border-border-color px-4 py-2 text-xs text-text-secondary">
           {grandTopWeight !== null
-            ? `Tidak diundi: semuanya dapat hadiah tetap. Mereka punya ${grandTopWeight}× kesempatan di undian hadiah utama.`
+            ? grandTopWeight > 1
+              ? `Tidak diundi: semuanya dapat hadiah tetap. Mereka punya ${grandTopWeight}× kesempatan di undian hadiah utama.`
+              : 'Tidak diundi: semuanya dapat hadiah tetap.'
             : 'Tidak diundi: semuanya dapat hadiah tetap. Hadiah utama diundi dari daftar ini.'}
         </p>
         <ol className="grid grid-cols-1 divide-y divide-border-color md:grid-cols-2 md:divide-y-0">

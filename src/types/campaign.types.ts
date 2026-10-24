@@ -17,7 +17,7 @@ export interface CampaignRules {
   daily_timer_sec: number;
   weekly_timer_sec: number;
   timer_grace_sec: number;
-  grand_top_n: number; // top N overall (all churches): fixed prize; the grand prize is drawn from them
+  grand_top_n: number; // top N overall (all churches): fixed prize; grand draw = top N only (legacy) or weighted, see grand_top_weight
   draw_mode: DrawMode; // missing in old rows = 'live'
   grand_top_weight?: number; // absent = grand drawn from top N only (legacy); 1–5 = whole congregation, top N weighted
 }

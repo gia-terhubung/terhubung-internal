@@ -12,7 +12,7 @@ function groups(topN: number, grandTopWeight: number | null, drawMode: DrawMode)
   return [
     { type: 'top', title: `Hadiah tetap (${topN} besar)`, hint: `Tidak diundi. Untuk peringkat 1–${topN} dari semua gereja, ${handover}` },
     { type: 'normal', title: 'Hadiah reguler', hint: `Diundi lebih dulu dari semua jemaat gereja peserta, termasuk yang tanpa aplikasi dan ${topN} besar.` },
-    { type: 'grand', title: 'Hadiah utama', hint: grandTopWeight !== null ? `Diundi terakhir dari semua jemaat (${topN} besar ${grandTopWeight}× kesempatan).` : `Diundi terakhir dari ${topN} besar.` },
+    { type: 'grand', title: 'Hadiah utama', hint: grandTopWeight !== null ? grandTopWeight > 1 ? `Diundi terakhir dari semua jemaat (${topN} besar ${grandTopWeight}× kesempatan).` : 'Diundi terakhir dari semua jemaat.' : `Diundi terakhir dari ${topN} besar.` },
   ];
 }
 

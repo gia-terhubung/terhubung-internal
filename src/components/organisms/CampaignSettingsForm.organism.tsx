@@ -333,7 +333,7 @@ export function CampaignSettingsForm({
               <li>Peringkat 1–<b>{form.rules.grand_top_n}</b> dari semua gereja mendapat hadiah tetap (tidak diundi).</li>
               {weighted ? (
                 <li>
-                  Hadiah utama diundi dari semua jemaat terdaftar (termasuk tanpa aplikasi). Peringkat 1–{form.rules.grand_top_n} punya {grandWeight ?? '?'}× kesempatan.
+                  Hadiah utama diundi dari semua jemaat terdaftar (termasuk tanpa aplikasi). {grandWeight !== 1 && <>Peringkat 1–{form.rules.grand_top_n} punya {grandWeight ?? '?'}× kesempatan.</>}
                 </li>
               ) : (
                 <li>Hadiah utama diundi dari {form.rules.grand_top_n} besar itu.</li>
